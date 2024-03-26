@@ -13,3 +13,8 @@ __pycache__
 **/*.fdb_latexmk
 
 .ipynb_checkpoints
+
+/data/
+
+# MacOs Trash
+.DS_Store
