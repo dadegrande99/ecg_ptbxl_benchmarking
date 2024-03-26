@@ -8,6 +8,30 @@ on this page, so feel free to submit your results as PRs.
 
 Please acknowledge our work by citing the corresponding articles listed in [**References**](#references) below.
 
+## Table of contents
+
+- [Deep Learning for ECG Analysis: Benchmarks and Insights from PTB-XL](#deep-learning-for-ecg-analysis-benchmarks-and-insights-from-ptb-xl)
+  - [Table of contents](#table-of-contents)
+  - [Setup](#setup)
+    - [Install dependencies](#install-dependencies)
+    - [Get data](#get-data)
+  - [Reproduce results from the paper](#reproduce-results-from-the-paper)
+    - [Download models and results](#download-models-and-results)
+  - [Benchmarking user-provided models](#benchmarking-user-provided-models)
+    - [Notes on `e.evaluate()`](#notes-on-eevaluate)
+    - [Notes on bootstrapping](#notes-on-bootstrapping)
+    - [Notes on Finetuning](#notes-on-finetuning)
+  - [Leaderboard](#leaderboard)
+    - [1. PTB-XL: all statements](#1-ptb-xl-all-statements)
+    - [2. PTB-XL: diagnostic statements](#2-ptb-xl-diagnostic-statements)
+    - [3. PTB-XL: Diagnostic subclasses](#3-ptb-xl-diagnostic-subclasses)
+    - [4. PTB-XL: Diagnostic superclasses](#4-ptb-xl-diagnostic-superclasses)
+    - [5. PTB-XL: Form statements](#5-ptb-xl-form-statements)
+    - [6. PTB-XL: Rhythm statements](#6-ptb-xl-rhythm-statements)
+    - [7. ICBEB: All statements](#7-icbeb-all-statements)
+  - [References](#references)
+  - [License](#license)
+
 ## Setup
 
 ### Install dependencies
@@ -269,3 +293,7 @@ If you use the [ICBEB challenge 2018 dataset](http://2018.icbeb.org/Challenge.ht
     journal = {Journal of Medical Imaging and Health Informatics}
     }
 ```
+
+## License
+
+This project is licensed under the [GNU General Public License v3.0](https://choosealicense.com/licenses/gpl-3.0/) - see the [LICENSE](LICENSE) file for details.
