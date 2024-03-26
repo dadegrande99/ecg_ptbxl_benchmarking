@@ -5,7 +5,7 @@
 ####################################
 mkdir -p data
 cd data
-wget https://storage.googleapis.com/ptb-xl-1.0.1.physionet.org/ptb-xl-a-large-publicly-available-electrocardiography-dataset-1.0.1.zip
+wget -r -N -c -np https://physionet.org/files/ptb-xl/1.0.1/
 unzip ptb-xl-a-large-publicly-available-electrocardiography-dataset-1.0.1.zip
 mv ptb-xl-a-large-publicly-available-electrocardiography-dataset-1.0.1 ptbxl
 cd ..
