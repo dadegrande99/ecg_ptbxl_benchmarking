@@ -15,6 +15,7 @@ __pycache__
 .ipynb_checkpoints
 
 /data/
+/tmp_data/
 
 # MacOs Trash
 .DS_Store
