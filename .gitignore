@@ -17,5 +17,7 @@ __pycache__
 /data/
 /tmp_data/
 
+/output/*
+
 # MacOs Trash
 .DS_Store
