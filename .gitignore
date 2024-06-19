@@ -25,3 +25,5 @@ __pycache__
 # IDEEs
 .idea/
 .vscode/
+
+**/testF.ipynb
