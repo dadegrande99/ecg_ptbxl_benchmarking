@@ -21,3 +21,7 @@ __pycache__
 
 # MacOs Trash
 .DS_Store
+
+# IDEEs
+.idea/
+.vscode/

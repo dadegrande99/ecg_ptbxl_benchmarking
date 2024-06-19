@@ -2,9 +2,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
+from torch.core import *
 
-from fastai.layers import *
-from fastai.core import *
+from typing import List, Optional, Union
 
 ##############################################################################################################################################
 # utility functions
@@ -85,15 +85,15 @@ def weight_init(m):
         stdv2=math.sqrt(1./m.w2.size[1])
         nn.init.normal_(m.w2,0.,stdv2)
 
-def create_head1d(nf:int, nc:int, lin_ftrs:Optional[Collection[int]]=None, ps:Floats=0.5, bn_final:bool=False, bn:bool=True, act="relu", concat_pooling=True):
+def create_head1d(nf:int, nc:int, lin_ftrs:Optional[List[int]]=None, ps:Union[float, List[float]]=0.5, bn_final:bool=False, bn:bool=True, act="relu", concat_pooling=True):
     "Model head that takes `nf` features, runs through `lin_ftrs`, and about `nc` classes; added bn and act here"
-    lin_ftrs = [2*nf if concat_pooling else nf, nc] if lin_ftrs is None else [2*nf if concat_pooling else nf] + lin_ftrs + [nc] #was [nf, 512,nc]
-    ps = listify(ps)
+    lin_ftrs = [2*nf if concat_pooling else nf, nc] if lin_ftrs is None else [2*nf if concat_pooling else nf] + lin_ftrs + [nc]
+    ps = list(ps) if isinstance(ps, List) else [ps]
     if len(ps)==1: ps = [ps[0]/2] * (len(lin_ftrs)-2) + ps
     actns = [nn.ReLU(inplace=True) if act=="relu" else nn.ELU(inplace=True)] * (len(lin_ftrs)-2) + [None]
-    layers = [AdaptiveConcatPool1d() if concat_pooling else nn.MaxPool1d(2), Flatten()]
+    layers = [nn.AdaptiveAvgPool1d(1), nn.Flatten()] if concat_pooling else [nn.MaxPool1d(2), nn.Flatten()]
     for ni,no,p,actn in zip(lin_ftrs[:-1],lin_ftrs[1:],ps,actns):
-        layers += bn_drop_lin(ni,no,bn,p,actn)
+        layers += [nn.BatchNorm1d(ni), nn.Dropout(p), nn.Linear(ni, no), actn] if bn else [nn.Dropout(p), nn.Linear(ni, no), actn]
     if bn_final: layers.append(nn.BatchNorm1d(lin_ftrs[-1], momentum=0.01))
     return nn.Sequential(*layers)
 ##############################################################################################################################################
@@ -101,36 +101,38 @@ def create_head1d(nf:int, nc:int, lin_ftrs:Optional[Collection[int]]=None, ps:Fl
 
 class basic_conv1d(nn.Sequential):
     '''basic conv1d'''
-    def __init__(self, filters=[128,128,128,128],kernel_size=3, stride=2, dilation=1, pool=0, pool_stride=1, squeeze_excite_reduction=0, num_classes=2, input_channels=8, act="relu", bn=True, headless=False,split_first_layer=False,drop_p=0.,lin_ftrs_head=None, ps_head=0.5, bn_final_head=False, bn_head=True, act_head="relu", concat_pooling=True):
-        layers = []
-        if(isinstance(kernel_size,int)):
-            kernel_size = [kernel_size]*len(filters)
-        for i in range(len(filters)):
-            layers_tmp = []
-            
-            layers_tmp.append(_conv1d(input_channels if i==0 else filters[i-1],filters[i],kernel_size=kernel_size[i],stride=(1 if (split_first_layer is True and i==0) else stride),dilation=dilation,act="none" if ((headless is True and i==len(filters)-1) or (split_first_layer is True and i==0)) else act, bn=False if (headless is True and i==len(filters)-1) else bn,drop_p=(0. if i==0 else drop_p)))
-            if((split_first_layer is True and i==0)):
-                layers_tmp.append(_conv1d(filters[0],filters[0],kernel_size=1,stride=1,act=act, bn=bn,drop_p=0.))
-                #layers_tmp.append(nn.Linear(filters[0],filters[0],bias=not(bn)))
-                #layers_tmp.append(_fc(filters[0],filters[0],act=act,bn=bn))
-            if(pool>0 and i<len(filters)-1):
-                layers_tmp.append(nn.MaxPool1d(pool,stride=pool_stride,padding=(pool-1)//2))
-            if(squeeze_excite_reduction>0):
-                layers_tmp.append(SqueezeExcite1d(filters[i],squeeze_excite_reduction))
-            layers.append(nn.Sequential(*layers_tmp))
 
-        #head
-        #layers.append(nn.AdaptiveAvgPool1d(1))    
-        #layers.append(nn.Linear(filters[-1],num_classes))
-        #head #inplace=True leads to a runtime error see ReLU+ dropout https://discuss.pytorch.org/t/relu-dropout-inplace/13467/5
-        self.headless = headless
-        if(headless is True):
-            head = nn.Sequential(nn.AdaptiveAvgPool1d(1),Flatten())
-        else:
-            head=create_head1d(filters[-1], nc=num_classes, lin_ftrs=lin_ftrs_head, ps=ps_head, bn_final=bn_final_head, bn=bn_head, act=act_head, concat_pooling=concat_pooling)
-        layers.append(head)
-        
-        super().__init__(*layers)
+    class MyModel(nn.Module):
+        def __init__(self, filters=[128, 128, 128, 128], kernel_size=3, stride=2, dilation=1, pool=0, pool_stride=1,
+                     squeeze_excite_reduction=0, num_classes=2, input_channels=8, act="relu", bn=True, headless=False,
+                     split_first_layer=False, drop_p=0., lin_ftrs_head=None, ps_head=0.5, bn_final_head=False,
+                     bn_head=True, act_head="relu", concat_pooling=True):
+            layers = []
+            if isinstance(kernel_size, int):
+                kernel_size = [kernel_size] * len(filters)
+            for i in range(len(filters)):
+                layers_tmp = []
+                layers_tmp.append(
+                    nn.Conv1d(input_channels if i == 0 else filters[i - 1], filters[i], kernel_size=kernel_size[i],
+                              stride=(1 if (split_first_layer is True and i == 0) else stride), dilation=dilation))
+                if bn:
+                    layers_tmp.append(nn.BatchNorm1d(filters[i]))
+                layers_tmp.append(nn.ReLU() if act == "relu" else nn.Linear())
+                if pool > 0 and i < len(filters) - 1:
+                    layers_tmp.append(nn.MaxPool1d(pool, stride=pool_stride, padding=(pool - 1) // 2))
+                layers.append(nn.Sequential(*layers_tmp))
+            self.layers = nn.Sequential(*layers)
+            self.headless = headless
+            if not headless:
+                self.head = nn.Sequential(nn.AdaptiveAvgPool1d(1), nn.Flatten(), nn.Linear(filters[-1], num_classes))
+
+            super().__init__(*layers)
+
+        def forward(self, x):
+            x = self.layers(x)
+            if not self.headless:
+                x = self.head(x)
+            return x
     
     def get_layer_groups(self):
         return (self[2],self[-1])

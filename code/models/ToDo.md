@@ -1,0 +1,23 @@
+# Conversion to pytorch
+
+- [X] [base_model](base_model.py)
+  - it's empty
+- [X] [basic_conv1d](basic_conv1d.py)
+  - ok
+  - It should be the first model to modify
+- [ ] [fastai_model](fastai_model.py)
+  - is the skeletron for every models
+- [X] [inception1d](inception1d.py)
+  - ok
+- [X] [resnet1d](resnet1d.py)
+  - it use only functions from `basic_conv1d`
+- [X] [rnn1d](rnn1d.py)
+  - ok
+- [X] [timeseries_utils](timeseries_utils.py)
+  - This is not a model
+- [X] [wavelet](wavelet.py)
+  - This not use any fastai functions
+- [X] [xresnet1d](xresnet1d.py)
+  - ok
+- [X] [your_model](your_model.py)
+  - it's empty

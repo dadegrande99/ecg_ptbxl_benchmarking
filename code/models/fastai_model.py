@@ -1,15 +1,23 @@
 from models.timeseries_utils import *
 
-from fastai import *
-from fastai.basic_data import *
-from fastai.basic_train import *
-from fastai.train import *
-from fastai.metrics import *
-from fastai.torch_core import *
-from fastai.callbacks.tracker import SaveModelCallback
+# from fastai.basic_data import *
+# from fastai.basic_train import *
+# from fastai.train import *
+# from fastai.torch_core import *
+# from fastai.callbacks.tracker import SaveModelCallback
+
+import torch.nn as nn
+import torch.nn.functional as F
+import torch
+import numpy as np
+from torch.utils.data import Dataset, DataLoader, TensorDataset
+import torch.optim as optim
+import torchvision.transforms as transforms
+import torch.optim as optim
 
 from pathlib import Path
 from functools import partial
+import pandas as pd
 
 from models.resnet1d import resnet1d18,resnet1d34,resnet1d50,resnet1d101,resnet1d152,resnet1d_wang,resnet1d,wrn1d_22
 from models.xresnet1d import xresnet1d18,xresnet1d34,xresnet1d50,xresnet1d101,xresnet1d152,xresnet1d18_deep,xresnet1d34_deep,xresnet1d50_deep,xresnet1d18_deeper,xresnet1d34_deeper,xresnet1d50_deeper
@@ -19,76 +27,84 @@ from models.rnn1d import RNN1d
 import math
 
 from models.base_model import ClassificationModel
-import torch 
-
 #for lrfind
 import matplotlib
 import matplotlib.pyplot as plt
 
 #eval for early stopping
-from fastai.callback import Callback
 from utils.utils import evaluate_experiment
 
-class metric_func(Callback):
-    "Obtains score using user-supplied function func (potentially ignoring targets with ignore_idx)"
-    def __init__(self, func, name="metric_func", ignore_idx=None, one_hot_encode_target=True, argmax_pred=False, softmax_pred=True, flatten_target=True, sigmoid_pred=False,metric_component=None):
-        super().__init__()
+class TimeseriesDatasetCrops(Dataset):
+    def __init__(self, df, input_size, num_classes, chunk_length=0, min_chunk_length=0, stride=1, transforms=None, annotation=False, col_lbl="label", npy_data=None):
+        self.df = df
+        self.input_size = input_size
+        self.num_classes = num_classes
+        self.chunk_length = chunk_length
+        self.min_chunk_length = min_chunk_length
+        self.stride = stride
+        self.transforms = transforms
+        self.annotation = annotation
+        self.col_lbl = col_lbl
+        self.npy_data = npy_data
+
+    def __len__(self):
+        return len(self.df)
+
+    def __getitem__(self, idx):
+        if torch.is_tensor(idx):
+            idx = idx.tolist()
+
+        data = self.npy_data[idx]
+        label = self.df.loc[idx, self.col_lbl]
+
+        if self.transforms:
+            data = self.transforms(data)
+
+        return data, label
+
+def apply_init(module, func):
+    '''
+    Applies the initialization function `func` to the parameters of the `module`.
+    '''
+    if isinstance(module, (nn.Conv1d, nn.ConvTranspose1d, nn.Linear)):
+        func(module.weight)
+        if module.bias is not None:
+            nn.init.constant_(module.bias, 0)
+    elif isinstance(module, (nn.BatchNorm1d)):
+        if module.weight is not None:
+            nn.init.constant_(module.weight, 1)
+        if module.bias is not None:
+            nn.init.constant_(module.bias, 0)
+
+class MetricCallback:
+    def __init__(self, func, name="metric_func"):
         self.func = func
-        self.ignore_idx = ignore_idx
-        self.one_hot_encode_target = one_hot_encode_target
-        self.argmax_pred = argmax_pred
-        self.softmax_pred = softmax_pred
-        self.flatten_target = flatten_target
-        self.sigmoid_pred = sigmoid_pred
-        self.metric_component = metric_component
-        self.name=name
+        self.name = name
+        self.reset()
+
+    def reset(self):
+        self.y_pred = []
+        self.y_true = []
+
+    def compute_metric(self):
+        y_pred = torch.cat(self.y_pred, dim=0)
+        y_true = torch.cat(self.y_true, dim=0)
+        return self.func(y_true, y_pred)
+
+    def forward(self, output, target):
+        self.y_pred.append(output.detach().cpu())
+        self.y_true.append(target.detach().cpu())
+
+    def __call__(self, output, target):
+        self.forward(output, target)
 
     def on_epoch_begin(self, **kwargs):
-        self.y_pred = None
-        self.y_true = None
-    
-    def on_batch_end(self, last_output, last_target, **kwargs):
-        #flatten everything (to make it also work for annotation tasks)
-        y_pred_flat = last_output.view((-1,last_output.size()[-1]))
-        
-        if(self.flatten_target):
-            y_true_flat = last_target.view(-1)
-        y_true_flat = last_target
+        self.reset()
 
-        #optionally take argmax of predictions
-        if(self.argmax_pred is True):
-            y_pred_flat = y_pred_flat.argmax(dim=1)
-        elif(self.softmax_pred is True):
-            y_pred_flat = F.softmax(y_pred_flat, dim=1)
-        elif(self.sigmoid_pred is True):
-            y_pred_flat = torch.sigmoid(y_pred_flat)
-        
-        #potentially remove ignore_idx entries
-        if(self.ignore_idx is not None):
-            selected_indices = (y_true_flat!=self.ignore_idx).nonzero().squeeze()
-            y_pred_flat = y_pred_flat[selected_indices]
-            y_true_flat = y_true_flat[selected_indices]
-        
-        y_pred_flat = to_np(y_pred_flat)
-        y_true_flat = to_np(y_true_flat)
+    def on_epoch_end(self, **kwargs):
+        metric_value = self.compute_metric()
+        return {self.name: metric_value}
 
-        if(self.one_hot_encode_target is True):
-            y_true_flat = one_hot_np(y_true_flat,last_output.size()[-1])
-
-        if(self.y_pred is None):
-            self.y_pred = y_pred_flat
-            self.y_true = y_true_flat
-        else:
-            self.y_pred = np.concatenate([self.y_pred, y_pred_flat], axis=0)
-            self.y_true = np.concatenate([self.y_true, y_true_flat], axis=0)
-    
-    def on_epoch_end(self, last_metrics, **kwargs):
-        #access full metric (possibly multiple components) via self.metric_complete
-        self.metric_complete = self.func(self.y_true, self.y_pred)
-        if(self.metric_component is not None):
-            return add_metrics(last_metrics, self.metric_complete[self.metric_component])
-        else:
-            return add_metrics(last_metrics, self.metric_complete)
 
 def fmax_metric(targs,preds):
     return evaluate_experiment(targs,preds)["Fmax"]
@@ -114,24 +130,23 @@ def nll_regression_init(m):
     nn.init.constant_(m.bias,4)
 
 def lr_find_plot(learner, path, filename="lr_find", n_skip=10, n_skip_end=2):
-    '''saves lr_find plot as file (normally only jupyter output)
-    on the x-axis is lrs[-1]
     '''
-    learner.lr_find()
-    
-    backend_old= matplotlib.get_backend()
-    plt.switch_backend('agg')
+    Saves lr_find plot as file (normally only jupyter output).
+    On the x-axis is lrs[-1].
+    '''
+    # Perform learning rate range test
+    lrs, losses = learner.lr_find()
+    backend_old = matplotlib.get_backend()
+
+    # Plot the losses
+    plt.figure()
     plt.ylabel("loss")
     plt.xlabel("learning rate (log scale)")
-    losses = [ to_np(x) for x in learner.recorder.losses[n_skip:-(n_skip_end+1)]]
-    #print(learner.recorder.val_losses)
-    #val_losses = [ to_np(x) for x in learner.recorder.val_losses[n_skip:-(n_skip_end+1)]]
-
-    plt.plot(learner.recorder.lrs[n_skip:-(n_skip_end+1)],losses )
-    #plt.plot(learner.recorder.lrs[n_skip:-(n_skip_end+1)],val_losses )
-
+    plt.plot(lrs[n_skip:-(n_skip_end+1)], losses[n_skip:-(n_skip_end+1)])
     plt.xscale('log')
-    plt.savefig(str(path/(filename+'.png')))
+
+    # Save the plot
+    plt.savefig(str(path / (filename + '.png')))
     plt.switch_backend(backend_old)
 
 def losses_plot(learner, path, filename="losses", last:int=None):
@@ -143,16 +158,17 @@ def losses_plot(learner, path, filename="losses", last:int=None):
     plt.ylabel("loss")
     plt.xlabel("Batches processed")
 
-    last = ifnone(last,len(learner.recorder.nb_batches))
+    last = last if last is not None else len(learner.recorder.nb_batches)
     l_b = np.sum(learner.recorder.nb_batches[-last:])
-    iterations = range_of(learner.recorder.losses)[-l_b:]
+    iterations = np.arange(l_b)
+
     plt.plot(iterations, learner.recorder.losses[-l_b:], label='Train')
     val_iter = learner.recorder.nb_batches[-last:]
-    val_iter = np.cumsum(val_iter)+np.sum(learner.recorder.nb_batches[:-last])
+    val_iter = np.cumsum(val_iter) + np.sum(learner.recorder.nb_batches[:-last])
     plt.plot(val_iter, learner.recorder.val_losses[-last:], label='Validation')
     plt.legend()
 
-    plt.savefig(str(path/(filename+'.png')))
+    plt.savefig(str(path / (filename + '.png')))
     plt.switch_backend(backend_old)
 
 class fastai_model(ClassificationModel):
@@ -248,7 +264,7 @@ class fastai_model(ClassificationModel):
             #exchange top layer
             output_layer = learn.model.get_output_layer()
             output_layer_new = nn.Linear(output_layer.in_features,self.num_classes).cuda()
-            apply_init(output_layer_new, nn.init.kaiming_normal_)
+            learn.model.apply(lambda module: apply_init(module, nn.init.kaiming_normal_))
             learn.model.set_output_layer(output_layer_new)
             
             #layer groups
@@ -283,22 +299,43 @@ class fastai_model(ClassificationModel):
             losses_plot(learn, self.outputfolder,"losses"+str(len(layer_groups)))
 
         learn.save(self.name) #even for early stopping the best model will have been loaded again
-    
-    def predict(self, X):
-        X = [l.astype(np.float32) for l in X]
-        y_dummy = [np.ones(self.num_classes,dtype=np.float32) for _ in range(len(X))]
-        
-        learn = self._get_learner(X,y_dummy,X,y_dummy)
-        learn.load(self.name)
-        
-        preds,targs=learn.get_preds()
-        preds=to_np(preds)
-        
-        idmap=learn.data.valid_ds.get_id_mapping()
 
-        return aggregate_predictions(preds,idmap=idmap,aggregate_fn = np.mean if self.aggregate_fn=="mean" else np.amax)  
-        
+    import torch
+
+    def predict(self, X):
+        # Convert X to float32
+        X = [torch.tensor(l.astype(np.float32)) for l in X]
+
+        # Create dummy labels
+        y_dummy = [torch.ones(self.num_classes, dtype=torch.float32) for _ in range(len(X))]
+
+        # Create a DataLoader for inference
+        test_dl = torch.utils.data.DataLoader(list(zip(X, y_dummy)), batch_size=self.batch_size)
+
+        # Load the model
+        learn = self._get_learner(X, y_dummy, X, y_dummy)
+        learn.load(self.name)
+        learn.model.eval()
+
+        preds = []
+        with torch.no_grad():
+            for xb, _ in test_dl:
+                # Move inputs to device
+                xb = xb.to(learn.data.device)
+                # Perform inference
+                out = learn.model(xb)
+                # Convert predictions to numpy
+                preds.append(out.cpu().numpy())
+
+        preds = np.concatenate(preds)
+
+        idmap = learn.data.valid_ds.get_id_mapping()
+
+        return aggregate_predictions(preds, idmap=idmap,
+                                     aggregate_fn=np.mean if self.aggregate_fn == "mean" else np.amax)
+
     def _get_learner(self, X_train,y_train,X_val,y_val,num_classes=None):
+
         df_train = pd.DataFrame({"data":range(len(X_train)),"label":y_train})
         df_valid = pd.DataFrame({"data":range(len(X_val)),"label":y_val})
         
