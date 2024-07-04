@@ -55,6 +55,7 @@ class Inception1D(nn.Module):
             nn.Dropout(p=dropout_rate),
             nn.Linear(128, num_classes)
         )
+        self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
         x = self.inception1(x)
@@ -63,4 +64,4 @@ class Inception1D(nn.Module):
         x = self.global_avg_pool(x)
         x = x.view(x.size(0), -1)
         x = self.fc(x)
-        return x
+        return self.sigmoid(x)
