@@ -20,12 +20,15 @@ def get_dataloader(data, labels, batch_size, in_channels=12, shuffle=True):
     if data.shape[1] != in_channels:
         raise ValueError(f"Expected {in_channels} channels, but got {data.shape[1]} channels")
 
+    # Assicurati che le etichette siano float32 per supportare la previsione multilabel
     tensor_data = torch.tensor(data, dtype=torch.float32)
-    tensor_labels = torch.tensor(labels, dtype=torch.long)
+    tensor_labels = torch.tensor(labels, dtype=torch.float32)
+
     dataset = TensorDataset(tensor_data, tensor_labels)
     return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
 
-def import_ptbxl(path, sampling_rate=100, clean=True):
+def import_ptbxl(path : str = "", sampling_rate : int = 100, clean : bool = True):
+    # Load raw data function
     def load_raw_data(df, sampling_rate, path):
         if sampling_rate == 100:
             data = [wfdb.rdsamp(path+f) for f in tqdm(df.filename_lr)]
@@ -33,30 +36,42 @@ def import_ptbxl(path, sampling_rate=100, clean=True):
             data = [wfdb.rdsamp(path+f) for f in tqdm(df.filename_hr)]
         data = np.array([signal for signal, meta in data])
         return data
-    
-    def aggregate_diagnostic(y_dic):
-        tmp = []
-        for key in y_dic.keys():
-            if key in agg_df.index:
-                tmp.append(agg_df.loc[key].diagnostic_class)
-        return list(set(tmp))
 
+    # Load and convert annotation data
     ptbxl = pd.read_csv(path+'ptbxl_database.csv', index_col='ecg_id')
     ptbxl.scp_codes = ptbxl.scp_codes.apply(lambda x: ast.literal_eval(x))
+
+    # Load raw signal data
     raw = load_raw_data(ptbxl, sampling_rate, path)
 
+    # Load scp_statements.csv for diagnostic aggregation
     agg_df = pd.read_csv(path+'scp_statements.csv', index_col=0)
     agg_df = agg_df[agg_df.diagnostic == 1]
 
+    # Create a new column for each diagnostic class
     for el in agg_df.diagnostic_class.unique():
         ptbxl[el] = 0
 
+    # Add the diagnostic class to the dataframe
     for i, row in ptbxl.iterrows():
         for key in row.scp_codes.keys():
             if key in agg_df.index:
                 ptbxl.at[i, agg_df.loc[key].diagnostic_class] = 1
 
-    # Aggiungi i dati grezzi come array numpy al DataFrame
+
+    # Cleaning the data
+    if clean:
+        # Remove patients without a human's validation
+        raw = raw[ptbxl.validated_by_human]
+        ptbxl = ptbxl[ptbxl.validated_by_human]
+
+        # Remove patients with height less than 90
+        raw = raw[ptbxl['height'] > 90]
+        ptbxl = ptbxl[ptbxl['height'] > 90]
+
+        # Change sex values
+        ptbxl['sex'] = ptbxl['sex'].replace({0: 'Male', 1: 'Female'})
+
     ptbxl['raw_data'] = list(raw)
 
     return raw, ptbxl
