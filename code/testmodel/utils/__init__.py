@@ -1,24 +1,40 @@
 import torch
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import roc_auc_score, accuracy_score, f1_score
 import torch.nn.functional as F
 import torch.nn as nn
 import numpy as np
 
 
 def compute_loss(output, target):
-    loss_fn = nn.BCEWithLogitsLoss()
+    loss_fn = nn.BCELoss()
 
     return loss_fn(output, target.float())
 
 
-def compute_metrics(outputs, targets):
+
+def compute_metrics(outputs, targets, threshold=0.5):
     outputs = outputs.cpu().detach().numpy()
     targets = targets.cpu().detach().numpy()
+    
+    # Convertire le previsioni in etichette binarie utilizzando la soglia fornita
+    preds = (outputs >= threshold).astype(int)
+    
     aucs = []
+    f1_scores = []
+    accuracies = []
     for i in range(targets.shape[1]):
         auc = roc_auc_score(targets[:, i], outputs[:, i])
+        f1 = f1_score(targets[:, i], preds[:, i])
+        accuracy = accuracy_score(targets[:, i], preds[:, i])
         aucs.append(auc)
-    return np.mean(aucs), aucs
+        f1_scores.append(f1)
+        accuracies.append(accuracy)
+
+    avg_auc = np.mean(aucs)
+    avg_f1 = np.mean(f1_scores)
+    avg_acc = np.mean(accuracies)
+    
+    return avg_auc, avg_f1, avg_acc, aucs, f1_scores, accuracies
 
 
 def select_device():

@@ -1,4 +1,5 @@
 import torch.nn as nn
+import torch
 
 class ResidualBlock(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size=3, stride=1, downsample=None, dropout_rate=0.05):
@@ -41,7 +42,6 @@ class ResNet1D(nn.Module):
         self.avgpool = nn.AdaptiveAvgPool1d(1)
         self.dropout = nn.Dropout(p=dropout_rate)
         self.fc = nn.Linear(512, num_classes)
-        self.sigmoid = nn.Sigmoid()
 
     def _make_layer(self, block, out_channels, blocks, stride=1, dropout_rate=0.05):
         downsample = None
@@ -70,7 +70,7 @@ class ResNet1D(nn.Module):
         x = x.view(x.size(0), -1)
         x = self.dropout(x)
         x = self.fc(x)
-        return self.sigmoid(x)
+        return torch.sigmoid(x)
 
 def resnet1d18(num_classes=2, in_channels=12, dropout_rate=0.05):
     return ResNet1D(ResidualBlock, [2, 2, 2, 2], num_classes=num_classes, in_channels=in_channels, dropout_rate=dropout_rate)

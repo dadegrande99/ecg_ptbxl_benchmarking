@@ -12,7 +12,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 
 
-def train(model, device, train_loader, optimizer, epoch, output_dir, model_name):
+def train(model, device, train_loader, optimizer, epoch, output_dir, model_name, threshold=0.5):
     model.train()
     all_targets = []
     all_preds = []
@@ -37,11 +37,11 @@ def train(model, device, train_loader, optimizer, epoch, output_dir, model_name)
 
     predictions.to_csv(os.path.join(output_dir, 'models', model_name, 'train', f'{str(epoch).zfill(3)}.csv'), index=False)
     
-    auc_avg, auc_per_class = compute_metrics(torch.tensor(np.array(all_preds)), torch.tensor(np.array(all_targets)))
-    print(f'Train Epoch: {epoch} Loss: {loss.item():.4f}, AUC (avg): {auc_avg:.2f}, AUCs: {auc_per_class}')
+    avg_auc, _, _, _, _, _ = compute_metrics(torch.tensor(np.array(all_preds)), torch.tensor(np.array(all_targets)), threshold=threshold)
+    print(f'Train Epoch: {epoch} Loss: {loss.item():.4f}, AUC (avg): {avg_auc:.2f}')
 
 
-def validate(model, device, val_loader, epoch, output_dir, model_name):
+def validate(model, device, val_loader, epoch, output_dir, model_name, thresholds=np.arange(0.1, 1, 0.1)):
     model.eval()
     val_loss = 0
     all_targets = []
@@ -56,7 +56,15 @@ def validate(model, device, val_loader, epoch, output_dir, model_name):
             all_preds.extend(output.cpu().numpy())
 
     val_loss /= len(val_loader)
-    auc_avg, auc_per_class = compute_metrics(torch.tensor(np.array(all_preds)), torch.tensor(np.array(all_targets)))
+
+    best_auc = 0
+    best_results = {}
+    best_threshold = 0
+    for threshold in thresholds:
+        avg_auc, _, _, _, _, _ = compute_metrics(torch.tensor(np.array(all_preds)), torch.tensor(np.array(all_targets)), threshold=threshold)
+        if avg_auc > best_auc:
+            best_auc = avg_auc
+            best_threshold = threshold
     
     predictions = pd.DataFrame({
         "target" : all_targets,
@@ -64,12 +72,12 @@ def validate(model, device, val_loader, epoch, output_dir, model_name):
     })
     predictions.to_csv(os.path.join(output_dir, 'models', model_name, 'val', f'{str(epoch).zfill(3)}.csv'), index=False)
     
-    print(f'Validation set: Average loss: {val_loss:.4f}, AUC (avg): {auc_avg:.2f}, AUCs: {auc_per_class}')
+    print(f'Validation set: Average loss: {val_loss:.4f}, AUC (avg): {best_auc:.2f}')
 
-    return auc_avg, model.state_dict()
+    return best_auc, best_threshold, model.state_dict()
 
 
-def test(model, device, test_loader, output_dir, model_name):
+def test(model, device, test_loader, output_dir, model_name, threshold=0.5):
     model.eval()
     test_loss = 0
     all_targets = []
@@ -84,7 +92,7 @@ def test(model, device, test_loader, output_dir, model_name):
             all_preds.extend(output.cpu().numpy())
 
     test_loss /= len(test_loader)
-    auc_avg, auc_per_class = compute_metrics(torch.tensor(np.array(all_preds)), torch.tensor(np.array(all_targets)))
+    avg_auc, avg_f1, avg_acc, aucs, f1_scores, accuracies  = compute_metrics(torch.tensor(np.array(all_preds)), torch.tensor(np.array(all_targets)), threshold=threshold)
 
     predictions = pd.DataFrame({
         "target" : all_targets,
@@ -92,9 +100,12 @@ def test(model, device, test_loader, output_dir, model_name):
     })
     predictions.to_csv(os.path.join(output_dir, 'models', model_name, 'test.csv'), index=False)
     
-    print(f'Test set: Average loss: {test_loss:.4f}, AUC (avg): {auc_avg:.2f}, AUCs: {auc_per_class}')
+    print(f'- Average loss: {test_loss:.4f}')
+    print(f'- AUC (avg): {avg_auc:.4f}, AUC class 0: {aucs[0]:.4f}, AUC class 1: {aucs[1]:.4f}')
+    print(f'- F1 (avg): {avg_f1:.4f}, F1 class 0: {f1_scores[0]:.4f}, F1 class 1: {f1_scores[1]:.4f}')
+    print(f'- Accuracy (avg): {avg_acc:.4f}, Accuracy class 0: {accuracies[0]:.4f}, Accuracy class 1: {accuracies[1]:.4f}')
 
-    return auc_avg
+    return avg_auc, avg_f1, avg_acc, aucs, f1_scores, accuracies
 
 
 def main():
@@ -143,23 +154,25 @@ def main():
         'dropout_rate': dropout_rate
     }
 
+    # import data
+    _, ptbxl = import_ptbxl(path=data_dir, clean=clean)
+
     output_dir = args.output_dir
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
         print(f"Output directory '{output_dir}' created.")
     if not os.path.isdir(f'{output_dir}/models'):
         os.makedirs(f'{output_dir}/models')
-        print(f"Model directory '{output_dir}/models' created.")
+        print(f"Model directory '{os.path.join(output_dir, "models")}' created.")
     if not os.path.isdir(f'{output_dir}/data'):
         os.makedirs(f'{output_dir}/data')
-        print(f"Data directory '{output_dir}/data' created.")
+        print(f"Data directory '{os.path.join(output_dir, "data")}' created.")
 
     # Save the configuration file in the output directory
     with open(os.path.join(output_dir, 'config.json'), 'w') as f:
         json.dump(config, f)
 
-    # import and split the data
-    _, ptbxl = import_ptbxl(path=data_dir, clean=clean)
+    # split data
     train_df, val_df, test_df = split_data(
         ptbxl, folds=[train_fold, val_fold, test_fold])
 
@@ -181,6 +194,8 @@ def main():
 
     device = select_device()
 
+    thresholds = np.arange(0.1, 1, 0.1)
+
     for model_name, ModelClass in MODEL_LIST:
         print(f"\nTraining and testing model: {model_name}")
         model = ModelClass(in_channels=in_channels, num_classes=num_classes, dropout_rate=dropout_rate).to(device)
@@ -194,24 +209,38 @@ def main():
                 os.makedirs(f'{output_dir}/models/{model_name}/{el}')
 
         best_auc = 0
+        best_epoch = 0
+        best_threshold = thresholds[0]
         best_model_state = None
         for epoch in range(1, num_epochs + 1):
-            train(model, device, train_loader, optimizer, epoch, output_dir, model_name)
-            val_auc, model_state = validate(model, device, val_loader, epoch, output_dir, model_name)
+            train(model, device, train_loader, optimizer, epoch, output_dir, model_name, threshold=best_threshold)
+            val_auc, threshold, model_state = validate(model, device, val_loader, epoch, output_dir, model_name, thresholds=thresholds)
             
             if val_auc > best_auc:
                 best_auc = val_auc
+                best_epoch = epoch
+                best_threshold = threshold
+                print(best_threshold, type(best_threshold))
                 best_model_state = model_state
-                print(f"Best model with AUC: {best_auc:.4f} at epoch {epoch}")
+        print(f"Best model with AUC: {best_auc:.4f} at epoch {best_epoch}")
 
         # Save the best model state at the end of all epochs
         if best_model_state is not None:
-            torch.save(best_model_state, os.path.join(output_dir, f"{model_name}_best_model.pth"))
+            torch.save(best_model_state, os.path.join(output_dir, "models", model_name, "best_model.pth"))
             print(f"Saved best model with AUC: {best_auc:.4f}")
 
         print(f"Final evaluation on the test set for model: {model_name}")
-        test_auc = test(model, device, test_loader, output_dir, model_name)
-        print(f"Test AUC: {test_auc:.4f}")
+        test_auc = test(model, device, test_loader, output_dir, model_name, threshold=best_threshold)
+
+        # Save the best threshold, test AUC and best epoch in a JSON file
+        results = {
+            "best_threshold": best_threshold,
+            "test_auc": test_auc,
+            "best_epoch": best_epoch
+        }
+        with open(os.path.join(output_dir, "models", model_name, "results.json"), 'w') as f:
+            json.dump(results, f)
+
 
 
 if __name__ == '__main__':
