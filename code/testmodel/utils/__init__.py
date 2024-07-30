@@ -3,6 +3,7 @@ from sklearn.metrics import roc_auc_score, accuracy_score, f1_score
 import torch.nn.functional as F
 import torch.nn as nn
 import numpy as np
+import pandas as pd
 
 
 def compute_loss(output, target):
@@ -10,9 +11,28 @@ def compute_loss(output, target):
 
     return loss_fn(output, target.float())
 
+def custom_entropy_formula(predictions: np.array) -> np.array: # type: ignore
+    return -np.nansum(
+        np.mean(predictions, axis=0) * np.log(np.mean(predictions, axis=0)), axis=1
+    ) / np.log(predictions.shape[2])
 
 
-def compute_metrics(outputs, targets, threshold=0.5):
+def create_tensors_from_dataframe(csv_path, output_prefix='output_', target_prefix='target_'):
+    # Load the dataframe
+    df = pd.read_csv(csv_path)
+
+    # Get the output and target columns
+    output_columns = [col for col in df.columns if col.startswith(output_prefix)]
+    target_columns = [col for col in df.columns if col.startswith(target_prefix)]
+    
+    # Create the tensors
+    outputs_tensor = torch.tensor(df[output_columns].to_numpy())
+    targets_tensor = torch.tensor(df[target_columns].to_numpy())
+    
+    return outputs_tensor, targets_tensor
+
+
+def compute_metrics(outputs, targets, threshold = 0.5):
     outputs = outputs.cpu().detach().numpy()
     targets = targets.cpu().detach().numpy()
     
@@ -30,11 +50,11 @@ def compute_metrics(outputs, targets, threshold=0.5):
         f1_scores.append(f1)
         accuracies.append(accuracy)
 
-    avg_auc = np.mean(aucs)
-    avg_f1 = np.mean(f1_scores)
-    avg_acc = np.mean(accuracies)
+    avg_auc = float(np.mean(aucs))
+    avg_f1 = float(np.mean(f1_scores))
+    avg_acc = float(np.mean(accuracies))
     
-    return avg_auc, avg_f1, avg_acc, aucs, f1_scores, accuracies
+    return avg_auc, avg_f1, avg_acc, np.array(aucs), np.array(f1_scores), np.array(accuracies)
 
 
 def select_device():
