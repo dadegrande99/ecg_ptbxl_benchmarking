@@ -7,7 +7,7 @@ import wfdb
 import ast
 from tqdm import tqdm
 
-def get_dataloader(data, labels, batch_size, in_channels=12, shuffle=True):
+def get_dataloader(data, labels, batch_size, in_channels=12, shuffle=True, num_workers=7, persistent_workers=True):
     if isinstance(data, list):
         data = np.array(data)
     data = np.asarray(data, dtype=np.float32)  # Assicurarsi che i dati siano di tipo float32
@@ -25,7 +25,7 @@ def get_dataloader(data, labels, batch_size, in_channels=12, shuffle=True):
     tensor_labels = torch.tensor(labels, dtype=torch.float32)
 
     dataset = TensorDataset(tensor_data, tensor_labels)
-    return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
+    return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, persistent_workers=persistent_workers)
 
 def import_ptbxl(path : str = "", sampling_rate : int = 100, clean : bool = True):
     # Load raw data function
