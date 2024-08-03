@@ -4,7 +4,7 @@ import lightning as L
 from torchvision.models.resnet import conv1x1, conv3x3
 from utils import compute_loss, compute_metrics
 import numpy as np
-from .model_base import BaseModel
+from .model_base import BaseModelEE
 
 class ResidualBlock(L.LightningModule):
 
@@ -73,7 +73,7 @@ class BottleneckBlock(L.LightningModule):
         
         return out
 
-class ResNet1D(BaseModel, L.LightningModule):
+class ResNet1D(BaseModelEE, L.LightningModule):
     def __init__(self, block, layers, num_classes=2, in_channels=12, dropout_rate=0.05, learning_rate=0.1):
         super().__init__(in_channels=in_channels, num_classes=num_classes, dropout_rate=dropout_rate, learning_rate=learning_rate)
         self.in_channels = 64
@@ -81,17 +81,16 @@ class ResNet1D(BaseModel, L.LightningModule):
         self.bn1 = nn.BatchNorm1d(64)
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool1d(kernel_size=3, stride=2, padding=1)
-        self.resnet_layers = nn.ModuleList()
 
-        self.resnet_layers.append(self._make_layer(block, 64, layers[0], dropout_rate=dropout_rate))
+        self.modules_EE.append(self._make_layer(block, 64, layers[0], dropout_rate=dropout_rate))
         for i in range(1, len(layers)):
-            self.resnet_layers.append(self._make_layer(block, 64 * 2**i, layers[i], stride=2, dropout_rate=dropout_rate))
+            self.modules_EE.append(self._make_layer(block, 64 * 2**i, layers[i], stride=2, dropout_rate=dropout_rate))
         self.avgpool = nn.AdaptiveAvgPool1d(1)
         self.dropout = nn.Dropout(p=dropout_rate)
         self.fc = nn.Linear(64 * 2**(len(layers)-1) * block.expansion, num_classes)
 
         # Add intermediate classifiers for early exits
-        self.exits = nn.ModuleList([nn.Linear(64 * 2**i * block.expansion, num_classes) for i in range(len(self.resnet_layers))])
+        self.exits = nn.ModuleList([nn.Linear(64 * 2**i * block.expansion, num_classes) for i in range(len(self.modules_EE))])
         self.entropy_threshold = 0.5
 
     def _make_layer(self, block, out_channels, blocks, stride=1, dropout_rate=0.05):
@@ -108,55 +107,24 @@ class ResNet1D(BaseModel, L.LightningModule):
             layers.append(block(self.in_channels, out_channels, dropout_rate=dropout_rate))
         return nn.Sequential(*layers)
 
-    def forward(self, x):
-        if self.training:
-            return self.forward_training(x)
-        
+    def forward_intro(self, x):
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
         x = self.maxpool(x)
-        outputs = []
-
-        for i, layer in enumerate(self.resnet_layers):
-            x = layer(x)
-            out = x.mean(dim=2)
-            outputs.append(torch.sigmoid(self.exits[i](out)))
-            if self.should_exit(outputs[-1], self.entropy_threshold):
-                return outputs[-1]
-
-        x = self.avgpool(x)
-        x = x.view(x.size(0), -1)
-        x = self.dropout(x)
-        outputs.append(torch.sigmoid(self.fc(x)))
-        
-        return outputs[-1]
+        return x
     
-    def forward_training(self, x):
-        x = self.conv1(x)
-        x = self.bn1(x)
-        x = self.relu(x)
-        x = self.maxpool(x)
-        outputs = []
-
-        for i, layer in enumerate(self.resnet_layers):
-            x = layer(x)
-            out = x.mean(dim=2)
-            outputs.append(torch.sigmoid(self.exits[i](out)))
-            
+    def forward_final(self, x):
         x = self.avgpool(x)
         x = x.view(x.size(0), -1)
         x = self.dropout(x)
-        outputs.append(torch.sigmoid(self.fc(x)))
-
-        return tuple(outputs)
-
+        return torch.sigmoid(self.fc(x))
 
 def resnet1d18(num_classes=2, in_channels=12, dropout_rate=0.05, learning_rate = 0.1):
-    return ResNet1D(block=ResidualBlock, layers=[2, 2, 2, 2], num_classes=num_classes, in_channels=in_channels, dropout_rate=dropout_rate, learning_rate=learning_rate)
+    return ResNet1D(block=ResidualBlock, layers=[2, 2, 2, 2], num_classes=num_classes, in_channels=in_channels, dropout_rate=dropout_rate, learning_rate=learning_rate) # type: ignore
 
 def resnet1d34(num_classes=2, in_channels=12, dropout_rate=0.05, learning_rate = 0.1):
-    return ResNet1D(block=ResidualBlock, layers=[3, 4, 6, 3], num_classes=num_classes, in_channels=in_channels, dropout_rate=dropout_rate, learning_rate=learning_rate)
+    return ResNet1D(block=ResidualBlock, layers=[3, 4, 6, 3], num_classes=num_classes, in_channels=in_channels, dropout_rate=dropout_rate, learning_rate=learning_rate) # type: ignore
 
 def resnet1d50(num_classes=2, in_channels=12, dropout_rate=0.05, learning_rate = 0.1):
-    return ResNet1D(block=BottleneckBlock, layers=[3, 4, 6, 3], num_classes=num_classes, in_channels=in_channels, dropout_rate=dropout_rate, learning_rate=learning_rate)
+    return ResNet1D(block=BottleneckBlock, layers=[3, 4, 6, 3], num_classes=num_classes, in_channels=in_channels, dropout_rate=dropout_rate, learning_rate=learning_rate) # type: ignore

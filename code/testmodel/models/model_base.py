@@ -8,14 +8,14 @@ import numpy as np
 import pandas as pd
 import os
 
-class BaseModel(ABC, L.LightningModule):
+class BaseModelEE(ABC, L.LightningModule):
     def __init__(self, 
                  in_channels: int, 
                  num_classes: int, 
                  dropout_rate: float = 0.5, 
                  learning_rate: float = 0.1, 
                  thresholds: np.ndarray = np.arange(0.1, 1, 0.1, dtype=np.float32)):
-        super(BaseModel, self).__init__()
+        super(BaseModelEE, self).__init__()
         self.loss = compute_loss
         self.learning_rate = learning_rate
         self.in_channels = in_channels
@@ -28,14 +28,41 @@ class BaseModel(ABC, L.LightningModule):
         self.best_auc = 0.0
         self.best_threshold = 0.5
         self.entropy_threshold = 0.5
+        self.modules_EE = nn.ModuleList()
+        self.exits = nn.ModuleList()
 
-    @abstractmethod
     def forward(self, x):
-        pass
+        x = self.forward_intro(x)
+
+        x, outputs = self.forward_modules(x)
+
+        if len(outputs) <= len(self.modules_EE):
+            outputs.append(self.forward_final(x))
+
+        return tuple(outputs)
 
     @abstractmethod
-    def forward_training(self, batch, batch_idx):
+    def forward_intro(self, x):
+        # it will return the data to be used in the forward
         pass
+
+    def forward_modules(self, x):
+        outputs = []
+
+        for i, layer in enumerate(self.modules_EE):
+            x = layer(x)
+            out = x.mean(dim=2)
+            outputs.append(torch.sigmoid(self.exits[i](out)))
+            if not(self.training) and self.should_exit(outputs[-1], self.entropy_threshold):
+                for _ in range(i, len(self.inceptions)+1):
+                    outputs.append(outputs[-1])
+                return x, outputs
+        return x, outputs
+
+    @abstractmethod
+    def forward_final(self, x):
+        pass
+
 
     def should_exit(self, predictions, threshold):
         predictions_np = predictions.detach().cpu().numpy()
@@ -44,13 +71,13 @@ class BaseModel(ABC, L.LightningModule):
 
 
     def training_step(self, batch, batch_idx):
-        x, y = batch
-        y_hat = self(x)
-        losses = [self.loss(output, y) for output in y_hat]
+        inputs, target = batch
+        outputs = self(inputs)
+        losses = [self.loss(output, target) for output in outputs]
         total_loss = sum(losses) / len(losses)
         
         self.log('train_loss', total_loss)
-        self.training_outputs.append((y_hat, y))
+        self.training_outputs.append((outputs, target))
         return total_loss
     
     def on_train_epoch_end(self) -> None:
@@ -86,106 +113,122 @@ class BaseModel(ABC, L.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         inputs, target = batch
-        output = self(inputs)
-        loss = self.loss(output, target)
-        self.log("val_loss", loss)
-        self.validation_outputs.append((output.detach().cpu(), target.detach().cpu()))
-        return loss
+        outputs = self(inputs)
+        losses = [self.loss(output, target) for output in outputs]
+        total_loss = sum(losses) / len(losses)
+        
+        self.log("val_loss", total_loss)
+        self.validation_outputs.append((outputs, target))
+        return total_loss
 
     def on_validation_epoch_end(self) -> None:
-        # Aggregate all validation outputs
-        outputs, targets = zip(*self.validation_outputs)
-        outputs = torch.cat(outputs, dim=0)
-        targets = torch.cat(targets, dim=0)
-        
-        # Compute epoch-level metrics
+        y_hats, targets = zip(*self.validation_outputs)
+        targets = torch.cat(targets, dim=0).cpu()
+
         best_epoch = {
-            "avg_auc" : 0.0,
-            "avg_f1" : 0.0,
-            "avg_acc" : 0.0
+            "avg_auc": 0.0,
+            "avg_f1": 0.0,
+            "avg_acc": 0.0
         }
-        for threshold in self.thresholds:
-            avg_auc, avg_f1, avg_acc, aucs, f1_scores, accuracies = compute_metrics(outputs, targets, threshold) # type: ignore
-            if avg_auc > best_epoch["avg_auc"]:
-                best_epoch["avg_auc"] = avg_auc
-                best_epoch["avg_f1"] = avg_f1
-                best_epoch["avg_acc"] = avg_acc
-                if avg_auc > self.best_auc:
-                    self.best_auc = avg_auc
-                    self.best_threshold = threshold
-
         
-        # Log aggregated metrics
-        self.log('val_avg_auc', best_epoch["avg_auc"])
-        self.log('val_avg_f1', best_epoch["avg_f1"])
-        self.log('val_avg_acc', best_epoch["avg_acc"])
+        for i in range(len(y_hats[0])):
+            outputs = [y_hat[i].detach().cpu() for y_hat in y_hats]
+            outputs = torch.cat(outputs, dim=0)
+            
+            # Create a folder for each exit
+            exit_path = os.path.join(self.trainer.default_root_dir, f'val/exit_{i}')
+            os.makedirs(exit_path, exist_ok=True)
+            
+            # Save the outputs and targets
+            outputs_dict = {f"output_{j}": outputs[:, j].numpy() for j in range(outputs.shape[1])}
+            targets_dict = {f"target_{j}": targets[:, j].numpy() for j in range(targets.shape[1])}
+            
+            val_df = pd.DataFrame({
+                **outputs_dict,
+                **targets_dict
+            })
+            val_df.to_csv(f'{exit_path}/{self.current_epoch:03d}.csv', index=False)
+            
+            # Compute and log metrics
+            best_exit = {
+                "avg_auc": 0.0,
+                "avg_f1": 0.0,
+                "avg_acc": 0.0
+            }
+            for threshold in self.thresholds:
+                avg_auc, avg_f1, avg_acc, aucs, f1_scores, accuracies = compute_metrics(outputs, targets, threshold) # type: ignore
+                if avg_auc > best_exit["avg_auc"]:
+                    best_exit["avg_auc"] = avg_auc
+                    best_exit["avg_f1"] = avg_f1
+                    best_exit["avg_acc"] = avg_acc
+                    if avg_auc > best_epoch["avg_auc"]:
+                        best_epoch["avg_auc"] = avg_auc
+                        best_epoch["avg_f1"] = avg_f1
+                        best_epoch["avg_acc"] = avg_acc
+                        if avg_auc > self.best_auc:
+                            self.best_auc = avg_auc
+                            self.best_threshold = threshold
+            
+            self.log(f'val_avg_auc_{i}', best_exit["avg_auc"])
+            self.log(f'val_avg_f1_{i}', best_exit["avg_f1"])
+            self.log(f'val_avg_acc_{i}', best_exit["avg_acc"])
 
-        # Create dictionaries for output and target columns
-        outputs_dict = {f"output_{i}": outputs[:, i].numpy() for i in range(outputs.shape[1])}
-        targets_dict = {f"target_{i}": targets[:, i].numpy() for i in range(targets.shape[1])}
-        
-        # Combine dictionaries into a DataFrame
-        val_df = pd.DataFrame({
-            **outputs_dict,
-            **targets_dict
-        })
+        self.log(f'val_avg_auc', best_epoch["avg_auc"])
+        self.log(f'val_avg_f1', best_epoch["avg_f1"])
+        self.log(f'val_avg_acc', best_epoch["avg_acc"])
 
-        # Save the DataFrame to a CSV file
-        full_path = os.path.join(self.trainer.default_root_dir, 'val')
-        os.makedirs(full_path, exist_ok=True)
-        val_df.to_csv(f'{full_path}/{self.current_epoch:03d}.csv', index=False)
+            
         
-        # Clear the list for the next epoch
         self.validation_outputs.clear()
 
     
     def test_step(self, batch, batch_idx):
         inputs, target = batch
-        output = self(inputs)
-        loss = self.loss(output, target)
-        self.log("test_loss", loss)
-        self.test_outputs.append((output.detach().cpu(), target.detach().cpu()))
-        return loss
+        outputs = self(inputs)
+        losses = [self.loss(output, target) for output in outputs]
+        total_loss = sum(losses) / len(losses)
+        
+        self.log("test_loss", total_loss)
+        self.test_outputs.append((outputs, target))
+        return total_loss
     
     def on_test_epoch_end(self) -> None:
-        # Aggregate all test outputs
-        outputs, targets = zip(*self.test_outputs)
-        outputs = torch.cat(outputs, dim=0)
-        targets = torch.cat(targets, dim=0)
+        y_hats, ys = zip(*self.test_outputs)
+        ys = torch.cat(ys, dim=0).cpu()
         
-        # Compute epoch-level metrics
-        avg_auc, avg_f1, avg_acc, aucs, f1_scores, accuracies = compute_metrics(outputs, targets, self.best_threshold) # type: ignore
+        for i in range(len(y_hats[0])):
+            outputs = [y_hat[i].detach().cpu() for y_hat in y_hats]
+            outputs = torch.cat(outputs, dim=0)
+            
+            # Create a folder for each exit
+            test_path = os.path.join(self.trainer.default_root_dir, 'test')
+            os.makedirs(test_path, exist_ok=True)
+            
+            # Save the outputs and targets
+            outputs_dict = {f"output_{j}": outputs[:, j].numpy() for j in range(outputs.shape[1])}
+            targets_dict = {f"target_{j}": ys[:, j].numpy() for j in range(ys.shape[1])}
+            
+            test_df = pd.DataFrame({
+                **outputs_dict,
+                **targets_dict
+            })
+            test_df.to_csv(f'{test_path}/exit_{i}.csv', index=False)
+            
+            # Compute and log metrics
+            avg_auc, avg_f1, avg_acc, aucs, f1_scores, accuracies = compute_metrics(outputs, ys, self.best_threshold)
+            self.log(f'test_avg_auc_{i}', avg_auc)
+            self.log(f'test_avg_f1_{i}', avg_f1)
+            self.log(f'test_avg_acc_{i}', avg_acc)
         
-        # Log aggregated metrics
-        self.log('test_avg_auc', avg_auc) # type: ignore
-        self.log('test_avg_f1', avg_f1) # type: ignore
-        self.log('test_avg_acc', avg_acc) # type: ignore
-
-        
-        # Create dictionaries for output and target columns
-        outputs_dict = {f"output_{i}": outputs[:, i].numpy() for i in range(outputs.shape[1])}
-        targets_dict = {f"target_{i}": targets[:, i].numpy() for i in range(targets.shape[1])}
-        
-        # Combine dictionaries into a DataFrame
-        test_df = pd.DataFrame({
-            **outputs_dict,
-            **targets_dict
-        })
-
-        # Save the DataFrame to a CSV file
-        full_path = os.path.join(self.trainer.default_root_dir)
-        os.makedirs(full_path, exist_ok=True)
-        test_df.to_csv(f'{full_path}/test.csv', index=False)
-
         # Save model values
         values = {
             "best_auc": float(self.best_auc),
             "best_threshold": float(self.best_threshold)
         }
+        full_path = os.path.join(self.trainer.default_root_dir)
         with open(f'{full_path}/values.json', 'w') as f:
             json.dump(values, f, indent=4)
 
-        # Clear the list for the next epoch
         self.test_outputs.clear()
 
     def configure_optimizers(self):

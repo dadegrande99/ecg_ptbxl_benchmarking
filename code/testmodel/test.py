@@ -107,6 +107,8 @@ def main():
         model = ModelClass(in_channels=in_channels, num_classes=num_classes, dropout_rate=dropout_rate, learning_rate=learning_rate)
         trainer = L.Trainer(limit_train_batches=batch_size, max_epochs=num_epochs, callbacks=[early_stop_callback], devices=1, default_root_dir=os.path.abspath(f'{output_dir}/models/{model_name}'))
 
+        print(f"\n\nTraining model {model_name} ...\n")
+
         with torch.no_grad():
             trainer.fit(model, train_loader, val_loader)
             trainer.test(model, test_loader)
