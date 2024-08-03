@@ -1,8 +1,7 @@
 import torch
 from torch import optim, nn
 import lightning as L
-from torchvision.models.resnet import conv1x1
-from torchvision.models.resnet import conv3x3
+from torchvision.models.resnet import conv1x1, conv3x3
 from utils import compute_loss, compute_metrics
 import numpy as np
 from .model_base import BaseModel
@@ -44,8 +43,7 @@ class BottleneckBlock(L.LightningModule):
         super(BottleneckBlock, self).__init__()
         self.conv1 = nn.Conv1d(in_channels, out_channels, kernel_size=1, bias=False)
         self.bn1 = nn.BatchNorm1d(out_channels)
-        self.conv2 = nn.Conv1d(out_channels, out_channels, kernel_size=3, stride=stride,
-                               padding=1, bias=False)
+        self.conv2 = nn.Conv1d(out_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False)
         self.bn2 = nn.BatchNorm1d(out_channels)
         self.conv3 = nn.Conv1d(out_channels, out_channels * 4, kernel_size=1, bias=False)
         self.bn3 = nn.BatchNorm1d(out_channels * 4)
@@ -77,26 +75,23 @@ class BottleneckBlock(L.LightningModule):
 
 class ResNet1D(BaseModel, L.LightningModule):
     def __init__(self, block, layers, num_classes=2, in_channels=12, dropout_rate=0.05, learning_rate=0.1):
-        super().__init__(in_channels=in_channels, num_classes=num_classes,
-                                        dropout_rate=dropout_rate, learning_rate=learning_rate)
+        super().__init__(in_channels=in_channels, num_classes=num_classes, dropout_rate=dropout_rate, learning_rate=learning_rate)
         self.in_channels = 64
         self.conv1 = nn.Conv1d(in_channels, 64, kernel_size=7, stride=2, padding=3)
         self.bn1 = nn.BatchNorm1d(64)
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool1d(kernel_size=3, stride=2, padding=1)
-        self.layer1 = self._make_layer(block, 64, layers[0], dropout_rate=dropout_rate)
-        self.layer2 = self._make_layer(block, 128, layers[1], stride=2, dropout_rate=dropout_rate)
-        self.layer3 = self._make_layer(block, 256, layers[2], stride=2, dropout_rate=dropout_rate)
-        self.layer4 = self._make_layer(block, 512, layers[3], stride=2, dropout_rate=dropout_rate)
+        self.resnet_layers = nn.ModuleList()
+
+        self.resnet_layers.append(self._make_layer(block, 64, layers[0], dropout_rate=dropout_rate))
+        for i in range(1, len(layers)):
+            self.resnet_layers.append(self._make_layer(block, 64 * 2**i, layers[i], stride=2, dropout_rate=dropout_rate))
         self.avgpool = nn.AdaptiveAvgPool1d(1)
         self.dropout = nn.Dropout(p=dropout_rate)
-        self.fc = nn.Linear(512 * block.expansion, num_classes)
+        self.fc = nn.Linear(64 * 2**(len(layers)-1) * block.expansion, num_classes)
 
         # Add intermediate classifiers for early exits
-        self.exit1 = nn.Linear(64 * block.expansion, num_classes)
-        self.exit2 = nn.Linear(128 * block.expansion, num_classes)
-        self.exit3 = nn.Linear(256 * block.expansion, num_classes)
-        self.exit4 = nn.Linear(512 * block.expansion, num_classes)
+        self.exits = nn.ModuleList([nn.Linear(64 * 2**i * block.expansion, num_classes) for i in range(len(self.resnet_layers))])
         self.entropy_threshold = 0.5
 
     def _make_layer(self, block, out_channels, blocks, stride=1, dropout_rate=0.05):
@@ -116,61 +111,45 @@ class ResNet1D(BaseModel, L.LightningModule):
     def forward(self, x):
         if self.training:
             return self.forward_training(x)
+        
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
         x = self.maxpool(x)
-        
-        x = self.layer1(x)
-        exit1 = self.exit1(x.mean(dim=2))
-        if self.should_exit(exit1, self.entropy_threshold):
-            return torch.sigmoid(exit1)
+        outputs = []
 
-        x = self.layer2(x)
-        exit2 = self.exit2(x.mean(dim=2))
-        if self.should_exit(exit2, self.entropy_threshold):
-            return torch.sigmoid(exit2)
-
-        x = self.layer3(x)
-        exit3 = self.exit3(x.mean(dim=2))
-        if self.should_exit(exit3, self.entropy_threshold):
-            return torch.sigmoid(exit3)
-
-        x = self.layer4(x)
-        exit4 = self.exit4(x.mean(dim=2))
-        if self.should_exit(exit4, self.entropy_threshold):
-            return torch.sigmoid(exit4)
+        for i, layer in enumerate(self.resnet_layers):
+            x = layer(x)
+            out = x.mean(dim=2)
+            outputs.append(torch.sigmoid(self.exits[i](out)))
+            if self.should_exit(outputs[-1], self.entropy_threshold):
+                return outputs[-1]
 
         x = self.avgpool(x)
         x = x.view(x.size(0), -1)
         x = self.dropout(x)
-        x = self.fc(x)
-        return torch.sigmoid(x)
+        outputs.append(torch.sigmoid(self.fc(x)))
+        
+        return outputs[-1]
     
     def forward_training(self, x):
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
         x = self.maxpool(x)
-        
-        x = self.layer1(x)
-        exit1 = self.exit1(x.mean(dim=2))  # Intermediate classifier after layer1
+        outputs = []
 
-        x = self.layer2(x)
-        exit2 = self.exit2(x.mean(dim=2))  # Intermediate classifier after layer2
-
-        x = self.layer3(x)
-        exit3 = self.exit3(x.mean(dim=2))  # Intermediate classifier after layer3
-
-        x = self.layer4(x)
-        exit4 = self.exit4(x.mean(dim=2))  # Intermediate classifier after layer4
-
+        for i, layer in enumerate(self.resnet_layers):
+            x = layer(x)
+            out = x.mean(dim=2)
+            outputs.append(torch.sigmoid(self.exits[i](out)))
+            
         x = self.avgpool(x)
         x = x.view(x.size(0), -1)
         x = self.dropout(x)
-        final_output = self.fc(x)
+        outputs.append(torch.sigmoid(self.fc(x)))
 
-        return torch.sigmoid(exit1), torch.sigmoid(exit2), torch.sigmoid(exit3), torch.sigmoid(exit4), torch.sigmoid(final_output)
+        return tuple(outputs)
 
 
 def resnet1d18(num_classes=2, in_channels=12, dropout_rate=0.05, learning_rate = 0.1):
