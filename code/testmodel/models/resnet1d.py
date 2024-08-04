@@ -92,6 +92,7 @@ class ResNet1D(BaseModelEE, L.LightningModule):
         # Add intermediate classifiers for early exits
         self.exits = nn.ModuleList([nn.Linear(64 * 2**i * block.expansion, num_classes) for i in range(len(self.modules_EE))])
         self.entropy_threshold = 0.5
+        self.weights_ee = [1.0] * (len(self.exits)+1)
 
     def _make_layer(self, block, out_channels, blocks, stride=1, dropout_rate=0.05):
         downsample = None

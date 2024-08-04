@@ -3,7 +3,7 @@ import json
 import torch
 from torch import optim, nn
 import lightning as L
-from utils import compute_loss, compute_metrics
+from utils.metrics import compute_loss_ee, compute_metrics, custom_entropy_formula
 import numpy as np
 import pandas as pd
 import os
@@ -16,7 +16,7 @@ class BaseModelEE(ABC, L.LightningModule):
                  learning_rate: float = 0.1, 
                  thresholds: np.ndarray = np.arange(0.1, 1, 0.1, dtype=np.float32)):
         super(BaseModelEE, self).__init__()
-        self.loss = compute_loss
+        self.loss = compute_loss_ee
         self.learning_rate = learning_rate
         self.in_channels = in_channels
         self.num_classes = num_classes
@@ -30,6 +30,7 @@ class BaseModelEE(ABC, L.LightningModule):
         self.entropy_threshold = 0.5
         self.modules_EE = nn.ModuleList()
         self.exits = nn.ModuleList()
+        self.weights_ee = []
 
     def forward(self, x):
         x = self.forward_intro(x)
@@ -73,9 +74,7 @@ class BaseModelEE(ABC, L.LightningModule):
     def training_step(self, batch, batch_idx):
         inputs, target = batch
         outputs = self(inputs)
-        losses = [self.loss(output, target) for output in outputs]
-        total_loss = sum(losses) / len(losses)
-        
+        total_loss = self.loss(outputs, target, self.weights_ee)
         self.log('train_loss', total_loss)
         self.training_outputs.append((outputs, target))
         return total_loss
@@ -114,9 +113,7 @@ class BaseModelEE(ABC, L.LightningModule):
     def validation_step(self, batch, batch_idx):
         inputs, target = batch
         outputs = self(inputs)
-        losses = [self.loss(output, target) for output in outputs]
-        total_loss = sum(losses) / len(losses)
-        
+        total_loss = self.loss(outputs, target, self.weights_ee)
         self.log("val_loss", total_loss)
         self.validation_outputs.append((outputs, target))
         return total_loss
@@ -176,8 +173,6 @@ class BaseModelEE(ABC, L.LightningModule):
         self.log(f'val_avg_auc', best_epoch["avg_auc"])
         self.log(f'val_avg_f1', best_epoch["avg_f1"])
         self.log(f'val_avg_acc', best_epoch["avg_acc"])
-
-            
         
         self.validation_outputs.clear()
 
@@ -185,9 +180,7 @@ class BaseModelEE(ABC, L.LightningModule):
     def test_step(self, batch, batch_idx):
         inputs, target = batch
         outputs = self(inputs)
-        losses = [self.loss(output, target) for output in outputs]
-        total_loss = sum(losses) / len(losses)
-        
+        total_loss = self.loss(outputs, target, self.weights_ee)
         self.log("test_loss", total_loss)
         self.test_outputs.append((outputs, target))
         return total_loss
@@ -237,9 +230,3 @@ class BaseModelEE(ABC, L.LightningModule):
     def predict_step(self, batch):
         inputs, target = batch
         return self.model(inputs, target)
-    
-def custom_entropy_formula(predictions: np.array) -> np.array: # type: ignore
-    predictions = np.clip(predictions, 1e-9, 1 - 1e-9)  # Ensure values are in the range [1e-9, 1-1e-9]
-    predictions = np.mean(predictions, axis=0)  # Average predictions across batch
-    entropy = -np.nansum(predictions * np.log(predictions), axis=0) / np.log(predictions.shape[0])
-    return entropy

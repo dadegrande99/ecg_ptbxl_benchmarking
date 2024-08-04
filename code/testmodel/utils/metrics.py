@@ -10,10 +10,31 @@ def compute_loss(output, target):
 
     return loss_fn(output, target.float())
 
+
+def compute_loss_ee(outputs, target, weights:list = []):
+    loss_fn = compute_loss
+
+    if len(weights) == 0:
+        weights = [1.0] * len(outputs)
+    elif len(weights) < len(outputs):
+        massimo = max(weights)
+        weights = [massimo if i >= len(weights) else weights[i] for i in range(len(outputs))]
+    elif len(weights) > len(outputs):
+        weights = weights[:len(outputs)]
+
+    losses = [loss_fn(output, target) for output in outputs]
+    
+    return sum([losses[i] * weights[i] for i in range(len(outputs))]) / len(outputs)
+
+
 def custom_entropy_formula(predictions: np.array) -> np.array: # type: ignore
-    return -np.nansum(
-        np.mean(predictions, axis=0) * np.log(np.mean(predictions, axis=0)), axis=1
-    ) / np.log(predictions.shape[2])
+    predictions = np.clip(predictions, 1e-9, 1 - 1e-9)  # Ensure values are in the range [1e-9, 1-1e-9]
+    predictions = np.mean(predictions, axis=0)  # Average predictions across batch
+    
+    entropy = -np.nansum(predictions * np.log(predictions), axis=0) / np.log(predictions.shape[0])
+    
+    return entropy
+
 
 def compute_metrics(outputs, targets, threshold = 0.5):
     outputs = outputs.cpu().detach().numpy()
@@ -38,4 +59,3 @@ def compute_metrics(outputs, targets, threshold = 0.5):
     avg_acc = float(np.mean(accuracies))
     
     return avg_auc, avg_f1, avg_acc, np.array(aucs), np.array(f1_scores), np.array(accuracies)
-
