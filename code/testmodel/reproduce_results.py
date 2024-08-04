@@ -6,7 +6,8 @@ import pandas as pd
 import numpy as np
 from exceptions import DataDirectoryError
 from utils.loader import get_dataloader, import_ptbxl, split_data
-from utils import select_device, compute_loss, compute_metrics
+from utils import select_device
+from utils.metrics import compute_loss, compute_metrics
 import torch
 import torch.nn.functional as F
 import torch.optim as optim

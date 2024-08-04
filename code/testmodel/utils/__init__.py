@@ -1,20 +1,7 @@
 import torch
 from sklearn.metrics import roc_auc_score, accuracy_score, f1_score
-import torch.nn.functional as F
-import torch.nn as nn
 import numpy as np
 import pandas as pd
-
-
-def compute_loss(output, target):
-    loss_fn = nn.BCELoss()
-
-    return loss_fn(output, target.float())
-
-def custom_entropy_formula(predictions: np.array) -> np.array: # type: ignore
-    return -np.nansum(
-        np.mean(predictions, axis=0) * np.log(np.mean(predictions, axis=0)), axis=1
-    ) / np.log(predictions.shape[2])
 
 
 def create_tensors_from_dataframe(csv_path, output_prefix='output_', target_prefix='target_'):

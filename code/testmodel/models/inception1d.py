@@ -1,8 +1,6 @@
 import torch
-from torch import optim, nn
+from torch import nn
 import lightning as L
-from utils import compute_loss, compute_metrics
-import numpy as np
 from .model_base import BaseModelEE
 
 class InceptionModule(L.LightningModule):
