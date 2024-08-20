@@ -27,16 +27,13 @@ def compute_loss_ee(outputs, target, weights:list = []):
     return sum([losses[i] * weights[i] for i in range(len(outputs))]) / len(outputs)
 
 
-def custom_entropy_formula(predictions: np.array) -> np.array: # type: ignore
-    predictions = np.clip(predictions, 1e-9, 1 - 1e-9)  # Ensure values are in the range [1e-9, 1-1e-9]
-    predictions = np.mean(predictions, axis=0)  # Average predictions across batch
-    
-    entropy = -np.nansum(predictions * np.log(predictions), axis=0) / np.log(predictions.shape[0])
-    
-    return entropy
+def custom_entropy_formula(predictions):
+    predictions = np.clip(predictions, 1e-9, 1 - 1e-9)
+    entropy = -np.sum(predictions * np.log(predictions), axis=1)
+    return np.mean(entropy)
 
 
-def compute_metrics(outputs, targets, threshold = 0.5):
+def compute_metrics(outputs, targets, threshold = 0.5) -> tuple[float, float, float, np.array, np.array, np.array]: # type: ignore
     outputs = outputs.cpu().detach().numpy()
     targets = targets.cpu().detach().numpy()
     

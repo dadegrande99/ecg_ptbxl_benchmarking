@@ -31,6 +31,8 @@ class BaseModelEE(ABC, L.LightningModule):
         self.modules_EE = nn.ModuleList()
         self.exits = nn.ModuleList()
         self.weights_ee = []
+        self.test_all_exits = True
+        self.exits_used = []
 
     def forward(self, x):
         x = self.forward_intro(x)
@@ -49,15 +51,21 @@ class BaseModelEE(ABC, L.LightningModule):
 
     def forward_modules(self, x):
         outputs = []
+        exit_used = -1
 
         for i, layer in enumerate(self.modules_EE):
             x = layer(x)
             out = x.mean(dim=2)
             outputs.append(torch.sigmoid(self.exits[i](out)))
-            if not(self.training) and self.should_exit(outputs[-1], self.entropy_threshold):
-                for _ in range(i, len(self.inceptions)+1):
+            should_exit = self.should_exit(outputs[-1], self.entropy_threshold)
+            if should_exit and exit_used == -1:
+                exit_used = i
+            if not(self.training) and should_exit:
+                for _ in range(i, len(self.exits)):
                     outputs.append(outputs[-1])
+                self.exits_used[i] += 1
                 return x, outputs
+        self.exits_used[exit_used] += 1
         return x, outputs
 
     @abstractmethod
@@ -213,10 +221,11 @@ class BaseModelEE(ABC, L.LightningModule):
             self.log(f'test_avg_f1_{i}', avg_f1)
             self.log(f'test_avg_acc_{i}', avg_acc)
         
-        # Save model values
+        # Save model values        
         values = {
             "best_auc": float(self.best_auc),
-            "best_threshold": float(self.best_threshold)
+            "best_threshold": float(self.best_threshold),
+            "exits" : {exit: self.exits_used[exit] for exit in range(len(self.exits_used))}
         }
         full_path = os.path.join(self.trainer.default_root_dir)
         with open(f'{full_path}/values.json', 'w') as f:

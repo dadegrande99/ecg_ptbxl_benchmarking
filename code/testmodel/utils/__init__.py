@@ -2,9 +2,30 @@ import torch
 from sklearn.metrics import roc_auc_score, accuracy_score, f1_score
 import numpy as np
 import pandas as pd
+import os
 
 
-def create_tensors_from_dataframe(csv_path, output_prefix='output_', target_prefix='target_'):
+# find all directories in a directory
+def list_directories(path) -> list[str]:
+    return [name for name in os.listdir(path) if os.path.isdir(os.path.join(path, name))]
+
+def find_files_with_extension(directory_path, file_extension) -> list[str]:
+    matched_files = []
+    # Normalize the extension to include the dot if it's not already present
+    if not file_extension.startswith('.'):
+        file_extension = '.' + file_extension
+
+    # List files in the specified directory
+    for file in os.listdir(directory_path):
+        # Check if the file ends with the extension and is indeed a file
+        if file.endswith(file_extension) and os.path.isfile(os.path.join(directory_path, file)):
+            # Add the file to the list
+            matched_files.append(file)
+
+    return matched_files
+
+
+def create_tensors_from_dataframe(csv_path, output_prefix='output_', target_prefix='target_') -> tuple[torch.Tensor, torch.Tensor]:
     # Load the dataframe
     df = pd.read_csv(csv_path)
 
@@ -19,32 +40,7 @@ def create_tensors_from_dataframe(csv_path, output_prefix='output_', target_pref
     return outputs_tensor, targets_tensor
 
 
-def compute_metrics(outputs, targets, threshold = 0.5):
-    outputs = outputs.cpu().detach().numpy()
-    targets = targets.cpu().detach().numpy()
-    
-    # Convertire le previsioni in etichette binarie utilizzando la soglia fornita
-    preds = (outputs >= threshold).astype(int)
-    
-    aucs = []
-    f1_scores = []
-    accuracies = []
-    for i in range(targets.shape[1]):
-        auc = roc_auc_score(targets[:, i], outputs[:, i])
-        f1 = f1_score(targets[:, i], preds[:, i])
-        accuracy = accuracy_score(targets[:, i], preds[:, i])
-        aucs.append(auc)
-        f1_scores.append(f1)
-        accuracies.append(accuracy)
-
-    avg_auc = float(np.mean(aucs))
-    avg_f1 = float(np.mean(f1_scores))
-    avg_acc = float(np.mean(accuracies))
-    
-    return avg_auc, avg_f1, avg_acc, np.array(aucs), np.array(f1_scores), np.array(accuracies)
-
-
-def select_device():
+def select_device() -> torch.device:
     # Check for NVIDIA CUDA GPU
     if torch.cuda.is_available():
         device = torch.device("cuda")

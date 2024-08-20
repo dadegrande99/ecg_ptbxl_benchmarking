@@ -4,6 +4,7 @@ import os
 import json
 from exceptions import DataDirectoryError
 from utils.loader import get_dataloader, import_ptbxl, split_data
+from results_analysis import main as analyze_results
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 import torch
 import lightning as L
@@ -60,10 +61,9 @@ def main():
     # import data
     print("Importing data ...")
     _, ptbxl = import_ptbxl(path=data_dir, clean=clean)
-    print()
 
     # Create the output directory
-    print("Creating output directory if not exist...")
+    print("\nCreating output directory if not exist...")
     output_dir = args.output_dir
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -100,10 +100,9 @@ def main():
     test_loader = get_dataloader(test_df['raw_data'].tolist(), test_df[['MI', 'NORM']].values,
                                  batch_size=batch_size, in_channels=in_channels, shuffle=False)
 
-    early_stop_callback = EarlyStopping(monitor="val_avg_auc", min_delta=0.00, patience=3, verbose=False, mode="max")
-
     for model_name, ModelClass in MODEL_LIST:
-        print(f"\n\n\n Prepare settings for {model_name} ...")
+        early_stop_callback = EarlyStopping(monitor="val_avg_auc", min_delta=0.00, patience=3, verbose=False, mode="max")
+        print(f"\n\n\nPrepare settings for {model_name} ...")
         model = ModelClass(in_channels=in_channels, num_classes=num_classes, dropout_rate=dropout_rate, learning_rate=learning_rate)
         trainer = L.Trainer(limit_train_batches=batch_size, max_epochs=num_epochs, callbacks=[early_stop_callback], devices=1, default_root_dir=os.path.abspath(f'{output_dir}/models/{model_name}'))
 
@@ -116,6 +115,8 @@ def main():
         print()
 
     print("Done!")
+    # print("\n\n\nAnalyzing results ...\n")
+    # analyze_results(output_dir)
         
 
 if __name__ == '__main__':

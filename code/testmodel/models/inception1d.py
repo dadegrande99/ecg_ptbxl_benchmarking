@@ -67,6 +67,7 @@ class Inception1D(BaseModelEE, L.LightningModule):
         # after inception3, output shape: [128, 512]
 
         self.weights_ee = [1.0] * (len(self.exits)+1)
+        self.exits_used = [0] * (len(self.exits)+1)
 
     
     def forward_intro(self, x):
