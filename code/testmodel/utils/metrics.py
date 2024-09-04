@@ -28,9 +28,15 @@ def compute_loss_ee(outputs, target, weights:list = []):
 
 
 def custom_entropy_formula(predictions):
+    # Ensure that values are between 1e-9 and 1 - 1e-9 to avoid log domain errors
     predictions = np.clip(predictions, 1e-9, 1 - 1e-9)
     entropy = -np.sum(predictions * np.log(predictions), axis=1)
-    return np.mean(entropy)
+
+    # Maximum possible entropy when each class has equal probability
+    num_classes = predictions.shape[1]
+    max_entropy = np.log(num_classes)
+
+    return np.mean(entropy / max_entropy)
 
 def compute_metrics(outputs, targets, threshold=0.5) -> tuple[float, float, float, float, np.array, np.array, np.array, np.array]:  # type: ignore
     outputs = outputs.cpu().detach().numpy()

@@ -244,24 +244,27 @@ def plot_accuracy_with_confidence(model_data, x_label='Tau', y_label='Accuracy o
     plt.show()
 
 
-def custom_entropy_formula(predictions: np.array): # type: ignore
-    predictions = np.clip(predictions, 1e-9, 1 - 1e-9)  # Ensure values are in the range [1e-9, 1-1e-9]
-    # predictions = np.mean(predictions, axis=0)  # Average predictions across batch
-
-    if predictions.ndim > 1:
-        predictions = np.mean(predictions, axis=0)
-
-    # Calculate entropy using the formula: -sum(p(x) * log(p(x)))
-    if len(predictions) > 1:
-        if predictions.ndim == 1:
-            entropy = -np.sum(predictions * np.log(predictions)) / np.log(len(predictions))
-        else:
-            entropy = -np.sum(predictions * np.log(predictions), axis=0) / np.log(predictions.shape[0])
-    else:
-        entropy = 0
-
+def custom_entropy_formula(predictions):
+    # Ensure predictions are within the valid range for logarithms
+    predictions = np.clip(predictions, 1e-9, 1 - 1e-9)
     
-    return entropy
+    # If predictions are of shape (n, 1), assume binary classification and calculate the complementary probabilities
+    if predictions.shape[1] == 1:
+        complementary_predictions = 1 - predictions
+        predictions = np.hstack((complementary_predictions, predictions))
+
+    # Normalize predictions to ensure they sum to 1 (if necessary)
+    predictions /= np.sum(predictions, axis=1, keepdims=True)
+    
+    # Calculate entropy
+    entropy = -np.sum(predictions * np.log(predictions), axis=1)
+
+    # Since this is a binary classification, max entropy is log(2)
+    max_entropy = np.log(2)
+    normalized_entropy = np.mean(entropy) / max_entropy
+
+    return normalized_entropy
+
 
 # retrieve datas from csv
 def create_tensors_from_dataframe(csv_path, output_prefix='output_', target_prefix='target_'):
@@ -320,7 +323,7 @@ def main(output_dir='../../output/'):
     count_exit = {}
 
     # define metrics
-    metrics = ['auc', 'accuracy', 'f1', 'entropy']
+    metrics = ['auc', 'accuracy', 'f1', 'entropy', 'recall']
     for model_name in models_metrics:
         for mode in models_metrics[model_name]:
             for exit in models_metrics[model_name][mode]:
@@ -339,12 +342,7 @@ def main(output_dir='../../output/'):
     for mode in modes:
         for model_name in models:
             for exit in models[model_name][mode]:
-                max_exit = -1
-                # print( output_dir, 'models', model_name, mode, f'exit_{exit}')
-                # print(type(exit))
-                # print(find_files_with_extension(os.path.join(output_dir, 'models', model_name, mode, f'exit_{exit}'), 'csv'), '\n')
                 for el in find_files_with_extension(os.path.join(output_dir, 'models', model_name, mode, f'exit_{exit}'), 'csv'):
-                    #print(el)
                     epoch = int(el.split("_")[-1].split(".")[0])
                     try:
                         models[model_name][mode][exit][epoch] = create_tensors_from_dataframe(os.path.join(output_dir, 'models',
@@ -356,16 +354,13 @@ def main(output_dir='../../output/'):
         for model_name in models_metrics:
             for exit in models_metrics[model_name][mode]:
                 for i in models[model_name][mode][exit]:
-                    try:
-                        outputs, targets = models[model_name][mode][exit][i]
-                        avg_auc, avg_f1, avg_acc, avg_recall, aucs, f1_scores, accuracies, recall = compute_metrics(outputs, targets, models[model_name]["best_threshold"]) # type: ignore
-                        models_metrics[model_name][mode][exit]['auc'].append(avg_auc)
-                        models_metrics[model_name][mode][exit]['accuracy'].append(avg_acc)
-                        models_metrics[model_name][mode][exit]['f1'].append(avg_f1)
-                        models_metrics[model_name][mode][exit]['recall'].append(avg_recall)
-                        models_metrics[model_name][mode][exit]['entropy'].append(float(custom_entropy_formula(outputs.detach().cpu().numpy())))
-                    except:
-                        continue
+                    outputs, targets = models[model_name][mode][exit][i]
+                    avg_auc, avg_f1, avg_acc, avg_recall, aucs, f1_scores, accuracies, recall = compute_metrics(outputs, targets, models[model_name]["best_threshold"]) # type: ignore
+                    models_metrics[model_name][mode][exit]['auc'].append(avg_auc)
+                    models_metrics[model_name][mode][exit]['accuracy'].append(avg_acc)
+                    models_metrics[model_name][mode][exit]['f1'].append(avg_f1)
+                    models_metrics[model_name][mode][exit]['recall'].append(avg_recall)
+                    models_metrics[model_name][mode][exit]['entropy'].append(float(custom_entropy_formula(outputs.detach().cpu().numpy())))
 
     # test
     mode = 'test'
@@ -388,8 +383,10 @@ def main(output_dir='../../output/'):
     
 
 
+
+
     print("\n\nResults:")#count_exit
-    # print(json.dumps(models_metrics, indent=4))
+    print(json.dumps({model:models_metrics[model]["test"] for model in models_metrics}, indent=4))
 
     # plot
     plt_dir = os.path.join(output_dir, 'plots')
@@ -416,27 +413,6 @@ def main(output_dir='../../output/'):
                               title=f'Cumulative Count of {m}',
                               save_file=True, filename=os.path.join(plt_dir, f'cumulative_count_{m}.png'))      
         
-
-    # model_data = {}
-    # tau_values = np.linspace(0.1, 1.0, 10)  # Supponendo che tau vari da 0.1 a 1.0
-
-    # for model_name in models_metrics:
-    #     accuracies = []
-    #     lower_bounds = []
-    #     upper_bounds = []
-    #     for exit in models_metrics[model_name]['test']: 
-    #         for metric in models_metrics[model_name]['test'][exit]:
-    #             if metric == 'accuracy':
-    #                 acc = np.mean(models_metrics[model_name]['test'][exit][metric])
-    #                 std_dev = np.std(models_metrics[model_name]['test'][exit][metric])
-    #                 conf_interval = 1.96 * (std_dev / np.sqrt(len(models_metrics[model_name]['test'][exit][metric])))
-    #                 accuracies.append(acc)
-    #                 lower_bounds.append(max(0, acc - conf_interval))
-    #                 upper_bounds.append(min(1, acc + conf_interval))
-        
-    #     model_data[model_name] = (tau_values, accuracies, lower_bounds, upper_bounds)
-
-    # plot_accuracy_with_confidence(model_data, out_dir=plt_dir)
         
 if __name__ == '__main__':
     import argparse
@@ -444,6 +420,6 @@ if __name__ == '__main__':
     parser.add_argument('-o', '--output-dir', type=str, default='../../output/', help='Directory to save the results')
     args = parser.parse_args()
     output_dir = args.output_dir if args.output_dir[-1] == '/' else args.output_dir + '/'
-    output_dir = "/Users/davidegrandesso/Desktop/output copy/"
     output_dir = "/Users/davidegrandesso/Desktop/output/"
+    output_dir = "/Users/davidegrandesso/Desktop/output copy/"
     main(output_dir)
