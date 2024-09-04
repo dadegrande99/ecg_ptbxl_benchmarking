@@ -71,6 +71,8 @@ def import_ptbxl(path : str = "", sampling_rate : int = 100, clean : bool = True
 
         # Change sex values
         ptbxl['sex'] = ptbxl['sex'].replace({0: 'Male', 1: 'Female'})
+        
+        # remove 0-0 and 1-1
 
     ptbxl['raw_data'] = list(raw)
 

@@ -39,11 +39,13 @@ def main():
     clean = config.get('clean', False)
     num_epochs = config.get('num_epochs', 50)
     in_channels = config.get('in_channels', 12)
-    num_classes = config.get('num_classes', 2)
     train_fold = config.get('train_fold', 8)
     test_fold = config.get('test_fold', 9)
     val_fold = config.get('val_fold', 10)
     dropout_rate = config.get('dropout_rate', 0.05)
+
+    columns = config.get('columns', ['MI'])
+    num_classes = len(columns)
 
     config = {
         'batch_size': batch_size,
@@ -55,12 +57,17 @@ def main():
         'train_fold': train_fold,
         'test_fold': test_fold,
         'val_fold': val_fold,
-        'dropout_rate': dropout_rate
+        'dropout_rate': dropout_rate,
+        'columns': columns
     }
 
     # import data
     print("Importing data ...")
     _, ptbxl = import_ptbxl(path=data_dir, clean=clean)
+    before = len(ptbxl)
+    # reduces data to NORM or MI
+    ptbxl = ptbxl[ptbxl['NORM'] + ptbxl['MI'] == 1]
+    print(f"Data reduced from {before} to {len(ptbxl)} samples (-{round((before-len(ptbxl))/before,2)}%).")
 
     # Create the output directory
     print("\nCreating output directory if not exist...")
@@ -83,21 +90,21 @@ def main():
     # split data
     train_df, val_df, test_df = split_data(
         ptbxl, folds=[train_fold, val_fold, test_fold])
-
+    
     # Save the split data
-    train_df[['MI']].to_csv(os.path.join(
+    train_df[columns].to_csv(os.path.join(
         output_dir, 'data', 'y_training.csv'), index=False)
-    val_df[['MI']].to_csv(os.path.join(
+    val_df[columns].to_csv(os.path.join(
         output_dir, 'data', 'y_validation.csv'), index=False)
-    test_df[['MI']].to_csv(os.path.join(
+    test_df[columns].to_csv(os.path.join(
         output_dir, 'data', 'y_test.csv'), index=False)
 
     # create DataLoaders
-    train_loader = get_dataloader( train_df['raw_data'].tolist(), train_df[['MI', 'NORM']].values, 
+    train_loader = get_dataloader( train_df['raw_data'].tolist(), train_df[columns].values, 
                                   batch_size=batch_size, in_channels=in_channels)
-    val_loader = get_dataloader(val_df['raw_data'].tolist(), val_df[['MI', 'NORM']].values,
+    val_loader = get_dataloader(val_df['raw_data'].tolist(), val_df[columns].values,
                                 batch_size=batch_size,  in_channels=in_channels, shuffle=False)
-    test_loader = get_dataloader(test_df['raw_data'].tolist(), test_df[['MI', 'NORM']].values,
+    test_loader = get_dataloader(test_df['raw_data'].tolist(), test_df[columns].values,
                                  batch_size=batch_size, in_channels=in_channels, shuffle=False)
 
     for model_name, ModelClass in MODEL_LIST:

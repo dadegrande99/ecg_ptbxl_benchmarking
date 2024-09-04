@@ -1,5 +1,5 @@
 import torch
-from sklearn.metrics import roc_auc_score, accuracy_score, f1_score
+from sklearn.metrics import roc_auc_score, accuracy_score, f1_score, recall_score
 import torch.nn.functional as F
 import torch.nn as nn
 import numpy as np
@@ -32,27 +32,39 @@ def custom_entropy_formula(predictions):
     entropy = -np.sum(predictions * np.log(predictions), axis=1)
     return np.mean(entropy)
 
-
-def compute_metrics(outputs, targets, threshold = 0.5) -> tuple[float, float, float, np.array, np.array, np.array]: # type: ignore
+def compute_metrics(outputs, targets, threshold=0.5) -> tuple[float, float, float, float, np.array, np.array, np.array, np.array]:  # type: ignore
     outputs = outputs.cpu().detach().numpy()
     targets = targets.cpu().detach().numpy()
+
+    if outputs.ndim == 1:
+        outputs = outputs.reshape(-1, 1)
+        targets = targets.reshape(-1, 1)
     
-    # Convertire le previsioni in etichette binarie utilizzando la soglia fornita
+    # Convert predictions into binary labels using the provided threshold
     preds = (outputs >= threshold).astype(int)
     
     aucs = []
     f1_scores = []
     accuracies = []
+    recalls = []  # Adding recall metric list
     for i in range(targets.shape[1]):
         auc = roc_auc_score(targets[:, i], outputs[:, i])
         f1 = f1_score(targets[:, i], preds[:, i])
         accuracy = accuracy_score(targets[:, i], preds[:, i])
+        recall = recall_score(targets[:, i], preds[:, i]) 
+        
         aucs.append(auc)
         f1_scores.append(f1)
         accuracies.append(accuracy)
+        recalls.append(recall) 
 
+    # Calculate average metrics
     avg_auc = float(np.mean(aucs))
     avg_f1 = float(np.mean(f1_scores))
     avg_acc = float(np.mean(accuracies))
+    avg_recall = float(np.mean(recalls))  
     
-    return avg_auc, avg_f1, avg_acc, np.array(aucs), np.array(f1_scores), np.array(accuracies)
+    return avg_auc, avg_f1, avg_acc, avg_recall, np.array(aucs), np.array(f1_scores), np.array(accuracies), np.array(recalls)
+
+# Example usage would follow after defining the 'outputs' and 'targets' tensors.
+

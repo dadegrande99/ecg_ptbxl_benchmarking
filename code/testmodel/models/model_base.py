@@ -110,7 +110,7 @@ class BaseModelEE(ABC, L.LightningModule):
             train_df.to_csv(f'{exit_path}/{self.current_epoch:03d}.csv', index=False)
             
             # Compute and log metrics
-            avg_auc, avg_f1, avg_acc, aucs, f1_scores, accuracies = compute_metrics(outputs, ys, self.best_threshold)
+            avg_auc, avg_f1, avg_acc, avg_recall, aucs, f1_scores, accuracies, recall = compute_metrics(outputs, ys, self.best_threshold)
             self.log(f'train_avg_auc_{i}', avg_auc)
             self.log(f'train_avg_f1_{i}', avg_f1)
             self.log(f'train_avg_acc_{i}', avg_acc)
@@ -161,7 +161,7 @@ class BaseModelEE(ABC, L.LightningModule):
                 "avg_acc": 0.0
             }
             for threshold in self.thresholds:
-                avg_auc, avg_f1, avg_acc, aucs, f1_scores, accuracies = compute_metrics(outputs, targets, threshold) # type: ignore
+                avg_auc, avg_f1, avg_acc, avg_recall, aucs, f1_scores, accuracies, recall = compute_metrics(outputs, targets, threshold) # type: ignore
                 if avg_auc > best_exit["avg_auc"]:
                     best_exit["avg_auc"] = avg_auc
                     best_exit["avg_f1"] = avg_f1
@@ -216,10 +216,13 @@ class BaseModelEE(ABC, L.LightningModule):
             test_df.to_csv(f'{test_path}/exit_{i}.csv', index=False)
             
             # Compute and log metrics
-            avg_auc, avg_f1, avg_acc, aucs, f1_scores, accuracies = compute_metrics(outputs, ys, self.best_threshold)
+            avg_auc, avg_f1, avg_acc, avg_recall, aucs, f1_scores, accuracies, recall = compute_metrics(outputs, ys, self.best_threshold)
             self.log(f'test_avg_auc_{i}', avg_auc)
             self.log(f'test_avg_f1_{i}', avg_f1)
             self.log(f'test_avg_acc_{i}', avg_acc)
+
+            entropy = custom_entropy_formula(outputs.detach().cpu().numpy())
+            self.log(f'test_avg_entropy_{i}', entropy)
         
         # Save model values        
         values = {
