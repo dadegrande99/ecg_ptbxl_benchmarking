@@ -110,3 +110,36 @@ def compare_tensors(tensor_pair1, tensor_pair2) -> bool:
     targets_equal = torch.equal(targets_tensor1, targets_tensor2)
     
     return outputs_equal and targets_equal
+
+def custom_entropy_per_sample(predictions, num_classes: int = 2):
+    # Ensure that values are between 1e-9 and 1 - 1e-9 to avoid log domain errors
+    predictions = np.clip(predictions, 1e-9, 1 - 1e-9)
+    entropy = -np.sum(predictions * np.log(predictions), axis=1)
+    
+    # Maximum possible entropy when each class has equal probability
+    max_entropy = np.log(num_classes)
+    
+    # Normalized entropy per sample
+    normalized_entropy = entropy / max_entropy
+    
+    return normalized_entropy  # Returns an array of normalized entropy values per sample
+
+
+def compute_diff_and_confidence(outputs_targets_tuple):
+    outputs, targets = outputs_targets_tuple
+    outputs_np = outputs.detach().cpu().numpy()
+    targets_np = targets.detach().cpu().numpy()
+    
+    # Prepare probabilities for binary classification
+    p0 = 1 - outputs_np
+    probs = np.hstack((p0, outputs_np))
+    probs /= np.sum(probs, axis=1, keepdims=True)
+    
+    # Calculate confidence as 1 - normalized entropy per sample
+    confidence = 1 - custom_entropy_per_sample(probs, num_classes=2)
+    
+    # Compute absolute differences between outputs and targets
+    diff = np.abs(outputs_np - targets_np).flatten()
+    
+    # Return list of tuples (difference, confidence)
+    return list(zip(diff, confidence))
