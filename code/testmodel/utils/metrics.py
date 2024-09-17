@@ -27,20 +27,45 @@ def compute_loss_ee(outputs, target, weights:list = []):
     return sum([losses[i] * weights[i] for i in range(len(outputs))]) / len(outputs)
 
 
-def custom_entropy_formula(predictions):
+## Compuational cost ???
+
+def custom_entropy_formula(predictions, num_classes:int=2) -> float:
     # Ensure that values are between 1e-9 and 1 - 1e-9 to avoid log domain errors
     predictions = np.clip(predictions, 1e-9, 1 - 1e-9)
     entropy = -np.sum(predictions * np.log(predictions), axis=1)
 
     # Maximum possible entropy when each class has equal probability
-    num_classes = predictions.shape[1]
+    # num_classes = predictions.shape[1]
     max_entropy = np.log(num_classes)
 
     return np.mean(entropy / max_entropy)
 
+def custom_entropy_formula_analysis(predictions, num_classes:int=2) -> float:
+    # Ensure predictions are within the valid range for logarithms
+    predictions = np.clip(predictions, 1e-9, 1 - 1e-9)
+    
+    # If predictions are of shape (n, 1), assume binary classification and calculate the complementary probabilities
+    if predictions.shape[1] == 1:
+        complementary_predictions = 1 - predictions
+        predictions = np.hstack((complementary_predictions, predictions))
+
+    # Normalize predictions to ensure they sum to 1 (if necessary)
+    predictions /= np.sum(predictions, axis=1, keepdims=True)
+    
+    # Calculate entropy
+    entropy = -np.sum(predictions * np.log(predictions), axis=1)
+
+    # Since this is a binary classification, max entropy is log(2)
+    max_entropy = np.log(num_classes)
+    normalized_entropy = np.mean(entropy) / max_entropy
+
+    return normalized_entropy
+
 def compute_metrics(outputs, targets, threshold=0.5) -> tuple[float, float, float, float, np.array, np.array, np.array, np.array]:  # type: ignore
-    outputs = outputs.cpu().detach().numpy()
-    targets = targets.cpu().detach().numpy()
+    if isinstance(outputs, torch.Tensor):
+        outputs = outputs.cpu().detach().numpy()
+    if isinstance(targets, torch.Tensor):
+        targets = targets.cpu().detach().numpy()
 
     if outputs.ndim == 1:
         outputs = outputs.reshape(-1, 1)
@@ -74,3 +99,14 @@ def compute_metrics(outputs, targets, threshold=0.5) -> tuple[float, float, floa
 
 # Example usage would follow after defining the 'outputs' and 'targets' tensors.
 
+
+def compare_tensors(tensor_pair1, tensor_pair2) -> bool:
+    # retrieve pairs
+    outputs_tensor1, targets_tensor1 = tensor_pair1
+    outputs_tensor2, targets_tensor2 = tensor_pair2
+    
+    # compare output & target
+    outputs_equal = torch.equal(outputs_tensor1, outputs_tensor2)
+    targets_equal = torch.equal(targets_tensor1, targets_tensor2)
+    
+    return outputs_equal and targets_equal

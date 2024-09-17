@@ -43,7 +43,6 @@ def main():
     test_fold = config.get('test_fold', 9)
     val_fold = config.get('val_fold', 10)
     dropout_rate = config.get('dropout_rate', 0.05)
-
     columns = config.get('columns', ['MI'])
     num_classes = len(columns)
 
@@ -117,13 +116,21 @@ def main():
 
         with torch.no_grad():
             trainer.fit(model, train_loader, val_loader)
-            trainer.test(model, test_loader)
-            trainer.save_checkpoint(f'{output_dir}/models/{model_name}/checkpoint.ckpt')
+
+        print(f"\n\nTesting model {model_name} ...\n")
+        
+        mcd_results, _ = model.mcd_validation(test_loader, output_dir='test')
+        # indent print results
+        print(json.dumps(mcd_results, indent=4))
+        
+        trainer.save_checkpoint(f'{output_dir}/models/{model_name}/checkpoint.ckpt')
+        model.save_values()
+        model.save_results()
         print()
 
     print("Done!")
-    # print("\n\n\nAnalyzing results ...\n")
-    # analyze_results(output_dir)
+    print("\n\n\nAnalyzing results ...\n")
+    analyze_results(output_dir)
         
 
 if __name__ == '__main__':

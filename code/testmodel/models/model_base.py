@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 import json
+from tqdm import tqdm
 import torch
 from torch import optim, nn
 import lightning as L
@@ -33,6 +34,7 @@ class BaseModelEE(ABC, L.LightningModule):
         self.weights_ee = []
         self.test_all_exits = True
         self.exits_used = []
+        self.all_results = {}
 
     def forward(self, x):
         x = self.forward_intro(x)
@@ -55,9 +57,17 @@ class BaseModelEE(ABC, L.LightningModule):
 
         for i, layer in enumerate(self.modules_EE):
             x = layer(x)
+            x = self.dropout(x)
+            ## debug dimensione
+            # out = x # 
             out = x.mean(dim=2)
+            # print(out.shape)
+            # dropout
+
             outputs.append(torch.sigmoid(self.exits[i](out)))
             should_exit = self.should_exit(outputs[-1], self.entropy_threshold)
+            ## possibility to calculate the loss for the exit???
+
             if should_exit and exit_used == -1:
                 exit_used = i
             if not(self.training) and should_exit:
@@ -90,6 +100,17 @@ class BaseModelEE(ABC, L.LightningModule):
     def on_train_epoch_end(self) -> None:
         y_hats, ys = zip(*self.training_outputs)
         ys = torch.cat(ys, dim=0).cpu()
+
+        if "train" not in self.all_results:
+            self.all_results["train"] = {}
+            for i in range(len(y_hats[0])):
+                self.all_results["train"][f"exit_{i}"] = {
+                    "auc": [],
+                    "f1": [],
+                    "acc": [],
+                    "recall": [],
+                    "entropy": []
+                }
         
         for i in range(len(y_hats[0])):
             outputs = [y_hat[i].detach().cpu() for y_hat in y_hats]
@@ -111,9 +132,14 @@ class BaseModelEE(ABC, L.LightningModule):
             
             # Compute and log metrics
             avg_auc, avg_f1, avg_acc, avg_recall, aucs, f1_scores, accuracies, recall = compute_metrics(outputs, ys, self.best_threshold)
-            self.log(f'train_avg_auc_{i}', avg_auc)
-            self.log(f'train_avg_f1_{i}', avg_f1)
-            self.log(f'train_avg_acc_{i}', avg_acc)
+            entropy = custom_entropy_formula(outputs.detach().cpu().numpy())
+            self.all_results["train"][f"exit_{i}"]["auc"].append(avg_auc)
+            self.all_results["train"][f"exit_{i}"]["f1"].append(avg_f1)
+            self.all_results["train"][f"exit_{i}"]["acc"].append(avg_acc)
+            self.all_results["train"][f"exit_{i}"]["recall"].append(avg_recall)
+            self.all_results["train"][f"exit_{i}"]["entropy"].append(entropy)
+            for key in self.all_results["train"][f"exit_{i}"]:
+                self.log(f'train_{key}_{i}', self.all_results["train"][f"exit_{i}"][key][-1])
         
         self.training_outputs.clear()
     
@@ -135,6 +161,17 @@ class BaseModelEE(ABC, L.LightningModule):
             "avg_f1": 0.0,
             "avg_acc": 0.0
         }
+
+        if "val" not in self.all_results:
+            self.all_results["val"] = {}
+            for i in range(len(y_hats[0])):
+                self.all_results["val"][f"exit_{i}"] = {
+                    "auc": [],
+                    "f1": [],
+                    "acc": [],
+                    "recall": [],
+                    "entropy": []
+                }
         
         for i in range(len(y_hats[0])):
             outputs = [y_hat[i].detach().cpu() for y_hat in y_hats]
@@ -174,9 +211,15 @@ class BaseModelEE(ABC, L.LightningModule):
                             self.best_auc = avg_auc
                             self.best_threshold = threshold
             
-            self.log(f'val_avg_auc_{i}', best_exit["avg_auc"])
-            self.log(f'val_avg_f1_{i}', best_exit["avg_f1"])
-            self.log(f'val_avg_acc_{i}', best_exit["avg_acc"])
+            self.all_results["val"][f"exit_{i}"]["auc"].append(best_exit["avg_auc"])
+            self.all_results["val"][f"exit_{i}"]["f1"].append(best_exit["avg_f1"])
+            self.all_results["val"][f"exit_{i}"]["acc"].append(best_exit["avg_acc"])
+            self.all_results["val"][f"exit_{i}"]["recall"].append(avg_recall)
+            entropy = custom_entropy_formula(outputs.detach().cpu().numpy())
+            self.all_results["val"][f"exit_{i}"]["entropy"].append(entropy)
+            
+            for key in self.all_results["val"][f"exit_{i}"]:
+                self.log(f'val_{key}_{i}', self.all_results["val"][f"exit_{i}"][key][-1])
 
         self.log(f'val_avg_auc', best_epoch["avg_auc"])
         self.log(f'val_avg_f1', best_epoch["avg_f1"])
@@ -196,6 +239,17 @@ class BaseModelEE(ABC, L.LightningModule):
     def on_test_epoch_end(self) -> None:
         y_hats, ys = zip(*self.test_outputs)
         ys = torch.cat(ys, dim=0).cpu()
+
+        if "test" not in self.all_results:
+            self.all_results["test"] = {}
+            for i in range(len(y_hats[0])):
+                self.all_results["test"][f"exit_{i}"] = {
+                    "auc": [],
+                    "f1": [],
+                    "acc": [],
+                    "recall": [],
+                    "entropy": []
+                }
         
         for i in range(len(y_hats[0])):
             outputs = [y_hat[i].detach().cpu() for y_hat in y_hats]
@@ -217,22 +271,14 @@ class BaseModelEE(ABC, L.LightningModule):
             
             # Compute and log metrics
             avg_auc, avg_f1, avg_acc, avg_recall, aucs, f1_scores, accuracies, recall = compute_metrics(outputs, ys, self.best_threshold)
-            self.log(f'test_avg_auc_{i}', avg_auc)
-            self.log(f'test_avg_f1_{i}', avg_f1)
-            self.log(f'test_avg_acc_{i}', avg_acc)
-
             entropy = custom_entropy_formula(outputs.detach().cpu().numpy())
-            self.log(f'test_avg_entropy_{i}', entropy)
-        
-        # Save model values        
-        values = {
-            "best_auc": float(self.best_auc),
-            "best_threshold": float(self.best_threshold),
-            "exits" : {exit: self.exits_used[exit] for exit in range(len(self.exits_used))}
-        }
-        full_path = os.path.join(self.trainer.default_root_dir)
-        with open(f'{full_path}/values.json', 'w') as f:
-            json.dump(values, f, indent=4)
+            self.all_results["test"][f"exit_{i}"]["auc"].append(avg_auc)
+            self.all_results["test"][f"exit_{i}"]["f1"].append(avg_f1)
+            self.all_results["test"][f"exit_{i}"]["acc"].append(avg_acc)
+            self.all_results["test"][f"exit_{i}"]["recall"].append(avg_recall)
+            self.all_results["test"][f"exit_{i}"]["entropy"].append(entropy)
+            for key in self.all_results["test"][f"exit_{i}"]:
+                self.log(f'test_{key}_{i}', self.all_results["test"][f"exit_{i}"][key][-1])
 
         self.test_outputs.clear()
 
@@ -242,3 +288,125 @@ class BaseModelEE(ABC, L.LightningModule):
     def predict_step(self, batch):
         inputs, target = batch
         return self.model(inputs, target)
+    
+    def mcd_validation(self, mcd_loader, tagets=None, num_tests:int = 5, save:bool = True, output_dir:str = "mcd_validation")-> tuple[dict, dict]:
+
+        if mcd_loader is None:
+            raise ValueError("DataLoader is None.")
+        if tagets is None:
+            # get targets from mcd_loader
+            targets = []
+            for _, data in enumerate(mcd_loader):
+                _, target = data
+                targets.append(target)
+            targets = np.concatenate(targets, axis=0)
+
+        if output_dir is None:
+            output_dir = "mcd_validation"
+        if not os.path.isabs(output_dir):
+            output_dir = os.path.join(self.trainer.default_root_dir, output_dir)
+        dir_name = os.path.basename(output_dir)
+
+
+        ## progess bar
+        other_loop = 4
+        pbar = tqdm(total=num_tests * len(mcd_loader) + other_loop, desc="MonteCarloDropout Validation Progress")
+
+        # Compute outputs
+        outs = []
+        for _ in range(num_tests):
+            outputs = {}
+            for _, data in enumerate(mcd_loader):
+                inputs, target = data
+                out_i = self(inputs)
+                for j, out in enumerate(out_i):
+                    if j not in outputs:
+                        outputs[j] = []
+                    outputs[j].append(out.detach().cpu().numpy())
+                pbar.update(1)
+            for key in outputs:
+                outputs[key] = np.concatenate(outputs[key], axis=0)
+            outs.append(outputs)
+
+        # Calculate mean of outputs
+        outputs = {}
+        for el in outs:
+            for key in el:
+                if key not in outputs:
+                    outputs[key] = []
+                outputs[key].append(el[key])
+        pbar.update(1)
+
+        for key in outputs:
+            outputs[key] = np.mean(outputs[key], axis=0)
+        pbar.update(1)
+        
+        # Compue metrics
+        if dir_name not in self.all_results:
+            self.all_results[dir_name] = {}
+            for i in range(len(outputs)):
+                self.all_results[dir_name][f"exit_{i}"] = {
+                    "auc": [],
+                    "f1": [],
+                    "acc": [],
+                    "recall": [],
+                    "entropy": []
+                }
+        for i in range(len(outputs)):
+            outputs_i = outputs[i]
+            avg_auc, avg_f1, avg_acc, avg_recall, aucs, f1_scores, accuracies, recall = compute_metrics(outputs_i, targets, self.best_threshold)
+            entropy = custom_entropy_formula(outputs_i)
+            self.all_results[dir_name][f"exit_{i}"]["auc"].append(avg_auc)
+            self.all_results[dir_name][f"exit_{i}"]["f1"].append(avg_f1)
+            self.all_results[dir_name][f"exit_{i}"]["acc"].append(avg_acc)
+            self.all_results[dir_name][f"exit_{i}"]["recall"].append(avg_recall)
+            self.all_results[dir_name][f"exit_{i}"]["entropy"].append(entropy)
+            # log is not supported
+        pbar.update(1)
+                
+        # Transofrm outputs & targets to DataFrame
+        outputs_df = {}
+        for key in outputs:
+            outputs_df[f"exit_{key}"] = pd.DataFrame(np.hstack((outputs[key], targets)), 
+                    columns=[f'output_{i+1}' for i in range(outputs[key].shape[1])] + 
+                            [f'target_{i+1}' for i in range(targets.shape[1])])
+        pbar.update(1)
+   
+        if save: # Save outputs
+            os.makedirs(output_dir, exist_ok=True)
+            for key in outputs_df:
+                outputs_df[key].to_csv(os.path.join(output_dir, f"{key}.csv"), index=False)
+
+        pbar.close()# Close progress bar
+
+        return (self.all_results[dir_name], outputs_df)
+    
+    def save_values(self, path = None, save:bool = True):
+        if path is None:
+            path = self.trainer.default_root_dir
+        values = {
+            "best_auc": float(self.best_auc),
+            "best_threshold": float(self.best_threshold),
+            "exits" : {exit: self.exits_used[exit] for exit in range(len(self.exits_used))}
+        }
+        if save:
+            os.makedirs(path, exist_ok=True)
+            with open(f'{path}/values.json', 'w') as f:
+                json.dump(values, f, indent=4)
+
+        return values
+    
+    def save_results(self, path:str = "results", save:bool = True):
+        if save:
+            if path is None:
+                path = self.trainer.default_root_dir
+            if not os.path.isabs(path):
+                path = os.path.join(self.trainer.default_root_dir, path)
+            os.makedirs(path, exist_ok=True)
+            for key in self.all_results:
+                for exit in self.all_results[key]:
+
+                    df = pd.DataFrame(self.all_results[key][exit])
+                    df.to_csv(f'{path}/{key}_{exit}.csv', index=False)
+
+        return self.all_results
