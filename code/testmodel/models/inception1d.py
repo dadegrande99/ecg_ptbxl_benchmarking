@@ -77,5 +77,6 @@ class Inception1D(BaseModelEE, L.LightningModule):
     def forward_final(self, x):
         x = self.global_avg_pool(x)
         x = x.view(x.size(0), -1)
+        x = self.dropout(x)
         return torch.sigmoid(self.fc(x))
     

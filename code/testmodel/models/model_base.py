@@ -31,6 +31,7 @@ class BaseModelEE(ABC, L.LightningModule):
         self.entropy_threshold = 0.5
         self.modules_EE = nn.ModuleList()
         self.exits = nn.ModuleList()
+        self.dropout = nn.Dropout(p=dropout_rate)
         self.weights_ee = []
         self.test_all_exits = True
         self.exits_used = []
