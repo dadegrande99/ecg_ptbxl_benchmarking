@@ -44,6 +44,8 @@ def main():
     val_fold = config.get('val_fold', 10)
     dropout_rate = config.get('dropout_rate', 0.05)
     columns = config.get('columns', ['MI'])
+    columns = ["MI", "NORM"]
+    early_stop: bool = config.get('early_stop', False)
     num_classes = len(columns)
 
     config = {
@@ -57,7 +59,8 @@ def main():
         'test_fold': test_fold,
         'val_fold': val_fold,
         'dropout_rate': dropout_rate,
-        'columns': columns
+        'columns': columns,
+        'early_stop': early_stop
     }
 
     # import data
@@ -107,22 +110,25 @@ def main():
                                  batch_size=batch_size, in_channels=in_channels, shuffle=False)
 
     for model_name, ModelClass in MODEL_LIST:
-        early_stop_callback = EarlyStopping(monitor="val_avg_auc", min_delta=0.00, patience=3, verbose=False, mode="max")
         print(f"\n\n\nPrepare settings for {model_name} ...")
+        callbacks = []
         model = ModelClass(in_channels=in_channels, num_classes=num_classes, dropout_rate=dropout_rate, learning_rate=learning_rate)
-        trainer = L.Trainer(limit_train_batches=batch_size, max_epochs=num_epochs, callbacks=[early_stop_callback], devices=1, default_root_dir=os.path.abspath(f'{output_dir}/models/{model_name}'))
+        if early_stop:
+            callbacks.append(EarlyStopping(monitor="val_avg_auc", min_delta=0.00, patience=3, verbose=False, mode="max"))
+        trainer = L.Trainer(limit_train_batches=batch_size, max_epochs=num_epochs, callbacks=callbacks, devices=1, default_root_dir=os.path.abspath(f'{output_dir}/models/{model_name}'))
 
         print(f"\n\nTraining model {model_name} ...\n")
-
         with torch.no_grad():
             trainer.fit(model, train_loader, val_loader)
 
-        print(f"\n\nTesting model {model_name} ...\n")
-        
-        mcd_results, _ = model.mcd_validation(test_loader, output_dir='test')
-        # indent print results
+        print(f"\n\nMonteCarloDropout Validation - {model_name} ...\n")
+        mcd_results, _ = model.mcd_validation(test_loader)
         print(json.dumps(mcd_results, indent=4))
+
+        print(f"\n\nTesting model {model_name} ...\n")
+        trainer.test(model, test_loader)
         
+        print(f"\n\nSaving results of {model_name} ...\n")
         trainer.save_checkpoint(f'{output_dir}/models/{model_name}/checkpoint.ckpt')
         model.save_values()
         model.save_results()

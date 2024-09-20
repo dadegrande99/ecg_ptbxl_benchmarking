@@ -124,21 +124,43 @@ def custom_entropy_per_sample(predictions, num_classes: int = 2):
     
     return normalized_entropy  # Returns an array of normalized entropy values per sample
 
+def custom_mcd_entropy_per_sample(predictions, num_classes: int = 2):
+    predictions = np.clip(predictions, 1e-9, 1 - 1e-9)
+    predictions = np.mean(predictions)
+    
+    # Calculate entropy per sample
+    entropy = -np.sum(predictions * np.log(predictions), axis=2)
+    
+    # Maximum possible entropy when each class has equal probability
+    max_entropy = np.log(num_classes)
+    
+    # Normalized entropy per sample
+    normalized_entropy = entropy / max_entropy
+    
+    return normalized_entropy  # Returns an array of normalized entropy values per sample
 
-def compute_diff_and_confidence(outputs_targets_tuple):
+def variational_ratios(outputs):
+
+    pass
+
+
+
+def compute_diff_and_confidence(outputs_targets_tuple, mcd = False):
+    if mcd:
+        entropy_formula = custom_mcd_entropy_per_sample
+    else:
+        entropy_formula = custom_entropy_per_sample 
     outputs, targets = outputs_targets_tuple
     outputs_np = outputs.detach().cpu().numpy()
     targets_np = targets.detach().cpu().numpy()
     
-    # Prepare probabilities for binary classification
     p0 = 1 - outputs_np
     probs = np.hstack((p0, outputs_np))
     probs /= np.sum(probs, axis=1, keepdims=True)
     
     # Calculate confidence as 1 - normalized entropy per sample
-    confidence = 1 - custom_entropy_per_sample(probs, num_classes=2)
+    confidence = 1 - entropy_formula(probs)
     
-    # Compute absolute differences between outputs and targets
     diff = np.abs(outputs_np - targets_np).flatten()
     
     # Return list of tuples (difference, confidence)

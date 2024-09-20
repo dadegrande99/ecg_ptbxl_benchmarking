@@ -26,7 +26,8 @@ def main(output_dir:str='../../output/'):
     y_datas = {
         'train': create_tensors_from_dataframe(f'{output_dir}/data/y_training.csv'),
         'val': create_tensors_from_dataframe(f'{output_dir}/data/y_validation.csv'),
-        'test': create_tensors_from_dataframe(f'{output_dir}/data/y_test.csv')
+        'test': create_tensors_from_dataframe(f'{output_dir}/data/y_test.csv'),
+        'mcd_validation': create_tensors_from_dataframe(f'{output_dir}/data/y_test.csv')
     }
     y_lens = {mode: len(y_datas[mode][1]) for mode in y_datas}
 
@@ -36,7 +37,8 @@ def main(output_dir:str='../../output/'):
         print(f'- {el}')
 
     # train
-    models = {el : {'train': {}, 'val': {}, 'test': {}} for el in list_directories(f'{output_dir}/models')}
+    # models = {el : {'train': {}, 'val': {}, 'test': {}} for el in list_directories(f'{output_dir}/models')}
+    models = {el : {'train': {}, 'val': {}, 'test': {}, 'mcd_validation': {}} for el in list_directories(f'{output_dir}/models')}
     models_metrics = {el : {'train': {}, 'val': {}, 'test': {}} for el in list_directories(f'{output_dir}/models')}
 
     # manage exist
@@ -69,11 +71,7 @@ def main(output_dir:str='../../output/'):
             for exit in models[model_name][mode]:
                 for el in find_files_with_extension(os.path.join(output_dir, 'models', model_name, mode, f'exit_{exit}'), 'csv'):
                     epoch = int(el.split("_")[-1].split(".")[0])
-                    try:
-                        models[model_name][mode][exit][epoch] = create_tensors_from_dataframe(os.path.join(output_dir, 'models',
-                                                                                                           model_name, mode, f'exit_{exit}', el))
-                    except:
-                        continue
+                    models[model_name][mode][exit][epoch] = create_tensors_from_dataframe(os.path.join(output_dir, 'models', model_name, mode, f'exit_{exit}', el))
 
         ## metrics
         for model_name in models_metrics:
@@ -87,24 +85,26 @@ def main(output_dir:str='../../output/'):
                     models_metrics[model_name][mode][exit]['recall'].append(avg_recall)
                     models_metrics[model_name][mode][exit]['entropy'].append(float(custom_entropy_formula(outputs.detach().cpu().numpy())))
 
-    # test
-    mode = 'test'
-    for model_name in models:
-        for exit in models[model_name][mode]:
-            try:
+    # test & mcd validation
+    modes = ['test', 'mcd_validation']
+    for mode in modes:
+        for model_name in models:
+            for exit in models[model_name][mode]:
                 models[model_name][mode][exit] = create_tensors_from_dataframe(os.path.join(output_dir, 'models', model_name, mode, f'exit_{exit}.csv'))
-            except:
-                continue
-    ## test metrics
-    for model_name in models_metrics:
-        for exit in models_metrics[model_name][mode]:
-            outputs, targets = models[model_name][mode][exit]
-            avg_auc, avg_f1, avg_acc, avg_recall, aucs, f1_scores, accuracies, recall = compute_metrics(outputs, targets, models[model_name]["best_threshold"]) # type: ignore
-            models_metrics[model_name][mode][exit]['auc'] = avg_auc
-            models_metrics[model_name][mode][exit]['accuracy'] = avg_acc
-            models_metrics[model_name][mode][exit]['f1'] = avg_f1
-            models_metrics[model_name][mode][exit]['recall'] = avg_recall
-            models_metrics[model_name][mode][exit]['entropy'] = float(custom_entropy_formula(outputs.detach().cpu().numpy()))
+
+    ## metrics
+    for mode in modes:
+        for model_name in models_metrics:
+            for exit in models_metrics[model_name][mode]:
+                outputs, targets = models[model_name][mode][exit]
+                if mode == 'mcd_validation':
+                    outputs = outputs.mean(2)
+                avg_auc, avg_f1, avg_acc, avg_recall, aucs, f1_scores, accuracies, recall = compute_metrics(outputs, targets, models[model_name]["best_threshold"]) # type: ignore
+                models_metrics[model_name][mode][exit]['auc'] = avg_auc
+                models_metrics[model_name][mode][exit]['accuracy'] = avg_acc
+                models_metrics[model_name][mode][exit]['f1'] = avg_f1
+                models_metrics[model_name][mode][exit]['recall'] = avg_recall
+                models_metrics[model_name][mode][exit]['entropy'] = float(custom_entropy_formula(outputs.detach().cpu().numpy()))
     
     print("\n\nResults:")#count_exit
     print(json.dumps({model:models_metrics[model]["test"] for model in models_metrics}, indent=4))
@@ -128,7 +128,7 @@ def main(output_dir:str='../../output/'):
         for model_name in models_metrics:
             for mode in models_metrics[model_name]:
                 for exit in models_metrics[model_name][mode]:
-                    if mode == 'test':
+                    if mode in ['test', 'mcd_validation']:
                         all_datas[model_name].append(models_metrics[model_name][mode][exit][m])
                     else:
                         all_datas[model_name] += models_metrics[model_name][mode][exit][m]
@@ -153,7 +153,7 @@ def main(output_dir:str='../../output/'):
         for mode in models_metrics[model]:
             for exit in models_metrics[model][mode]:
                 for metric in all_metrics:
-                    if mode != 'test':
+                    if mode not in ['test', 'mcd_validation']:
                         for i in range(len(models_metrics[model][mode][exit][metric])):
                             metric_confidence[model][metric].append((models_metrics[model][mode][exit][metric][i], 
                                                                     1 - models_metrics[model][mode][exit]['entropy'][i], 

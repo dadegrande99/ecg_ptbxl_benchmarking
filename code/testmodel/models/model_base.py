@@ -88,7 +88,16 @@ class BaseModelEE(ABC, L.LightningModule):
         predictions_np = predictions.detach().cpu().numpy()
         entropy = custom_entropy_formula(predictions_np)
         return entropy < threshold
+    
+    def turn_on_dropout(self):
+        self.dropout = nn.Dropout(p=self.dropout_rate)
 
+    def turn_off_dropout(self):
+        self.dropout = nn.Dropout(p=0)
+
+    def on_train_start(self) -> None:
+        self.turn_off_dropout()
+        return super().on_train_start()
 
     def training_step(self, batch, batch_idx):
         inputs, target = batch
@@ -144,6 +153,9 @@ class BaseModelEE(ABC, L.LightningModule):
         
         self.training_outputs.clear()
     
+    def on_validation_start(self) -> None:
+        self.turn_on_dropout()
+        return super().on_validation_start()
 
     def validation_step(self, batch, batch_idx):
         inputs, target = batch
@@ -228,6 +240,9 @@ class BaseModelEE(ABC, L.LightningModule):
         
         self.validation_outputs.clear()
 
+    def on_test_start(self) -> None:
+        self.turn_on_dropout()
+        return super().on_test_start()
     
     def test_step(self, batch, batch_idx):
         inputs, target = batch
@@ -290,11 +305,26 @@ class BaseModelEE(ABC, L.LightningModule):
         inputs, target = batch
         return self.model(inputs, target)
     
-    def mcd_validation(self, mcd_loader, tagets=None, num_tests:int = 5, save:bool = True, output_dir:str = "mcd_validation")-> tuple[dict, dict]:
+    def mcd_validation(self, mcd_loader, targets=None, num_tests:int = 5, save:bool = True, output_dir:str = "mcd_validation")-> tuple[dict, dict]:
+        """
+        Perform Monte Carlo Dropout validation by running multiple forward passes through the model with dropout enabled to estimate prediction uncertainties
+
+        Parameters:
+        - mcd_loader (DataLoader): DataLoader for Monte Carlo Dropout validation.
+        - targets (np.ndarray): Targets for the data. If None, targets will be extracted from the DataLoader.
+        - num_tests (int): Number of tests to run for Monte Carlo Dropout validation. Default is 5.
+        - save (bool): Whether to save the outputs to a CSV file. Default is True.
+        - output_dir (str): Directory to save the outputs. Default is 'mcd_validation'.
+
+        Returns:
+        - tuple[dict, dict]: A tuple containing the results and the outputs as DataFrames.
+            - dict: Results of the Monte Carlo Dropout validation.
+            - dict: Outputs of the Monte Carlo Dropout validation as DataFrames.
+        """
 
         if mcd_loader is None:
             raise ValueError("DataLoader is None.")
-        if tagets is None:
+        if targets is None:
             # get targets from mcd_loader
             targets = []
             for _, data in enumerate(mcd_loader):
@@ -338,6 +368,31 @@ class BaseModelEE(ABC, L.LightningModule):
                 outputs[key].append(el[key])
         pbar.update(1)
 
+        outputs_df = {}
+        for key in outputs:
+            num_tests = len(outputs[key])
+            # Stack outputs to shape (N, D, num_tests)
+            outputs_array = np.stack(outputs[key], axis=-1)  # Shape: (N, D, num_tests)
+            N, D, num_tests = outputs_array.shape
+            
+            # Prepare data for DataFrame
+            data = []
+            for n in range(N):
+                row = {}
+                for d in range(D):
+                    # Collect outputs across tests for data point n, dimension d
+                    outputs_list = outputs_array[n, d, :]  # Shape: (num_tests,)
+                    outputs_list = outputs_list.tolist()    # Convert to list
+                    # Assign to the appropriate column
+                    row[f'output_{d+1}'] = outputs_list
+                # Add target values
+                for t in range(targets.shape[1]):
+                    row[f'target_{t+1}'] = targets[n, t]
+                data.append(row)
+            # Create DataFrame
+            outputs_df[f'exit_{key}'] = pd.DataFrame(data)
+        pbar.update(1)
+
         for key in outputs:
             outputs[key] = np.mean(outputs[key], axis=0)
         pbar.update(1)
@@ -364,16 +419,8 @@ class BaseModelEE(ABC, L.LightningModule):
             self.all_results[dir_name][f"exit_{i}"]["entropy"].append(entropy)
             # log is not supported
         pbar.update(1)
-                
-        # Transofrm outputs & targets to DataFrame
-        outputs_df = {}
-        for key in outputs:
-            outputs_df[f"exit_{key}"] = pd.DataFrame(np.hstack((outputs[key], targets)), 
-                    columns=[f'output_{i+1}' for i in range(outputs[key].shape[1])] + 
-                            [f'target_{i+1}' for i in range(targets.shape[1])])
-        pbar.update(1)
    
-        if save: # Save outputs
+        if save:  # Save outputs
             os.makedirs(output_dir, exist_ok=True)
             for key in outputs_df:
                 outputs_df[key].to_csv(os.path.join(output_dir, f"{key}.csv"), index=False)
@@ -382,6 +429,7 @@ class BaseModelEE(ABC, L.LightningModule):
 
         return (self.all_results[dir_name], outputs_df)
     
+
     def save_values(self, path = None, save:bool = True):
         if path is None:
             path = self.trainer.default_root_dir
