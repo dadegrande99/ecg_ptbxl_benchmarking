@@ -1,8 +1,8 @@
 import numpy as np
-from utils.metrics import compute_metrics, compare_tensors, custom_entropy_formula_analysis as custom_entropy_formula, compute_diff_and_confidence
+from utils.metrics import compute_metrics, custom_entropy_formula_analysis as custom_entropy_formula, compute_diff_and_confidence
 from utils import list_directories, create_tensors_from_dataframe, find_files_with_extension
 from utils.plotting import (
-    plot_exit_counts, boxplot_metrics, barplot_metrics, plot_cumulative_count,
+    plot_exit_counts, boxplot_metrics, barplot_metrics, plot_cumulative_count, 
     plot_model_metrics, plot_model_metrics2, plot_dictionary_subplots, plot_metric_vs_confidence
 )
 import json
@@ -37,7 +37,6 @@ def main(output_dir:str='../../output/'):
         print(f'- {el}')
 
     # train
-    # models = {el : {'train': {}, 'val': {}, 'test': {}} for el in list_directories(f'{output_dir}/models')}
     models = {el : {'train': {}, 'val': {}, 'test': {}, 'mcd_validation': {}} for el in list_directories(f'{output_dir}/models')}
     models_metrics = {el : {'train': {}, 'val': {}, 'test': {}} for el in list_directories(f'{output_dir}/models')}
 
@@ -78,7 +77,7 @@ def main(output_dir:str='../../output/'):
             for exit in models_metrics[model_name][mode]:
                 for i in models[model_name][mode][exit]:
                     outputs, targets = models[model_name][mode][exit][i]
-                    avg_auc, avg_f1, avg_acc, avg_recall, aucs, f1_scores, accuracies, recall = compute_metrics(outputs, targets, models[model_name]["best_threshold"]) # type: ignore
+                    avg_auc, avg_f1, avg_acc, avg_recall = compute_metrics(outputs, targets, models[model_name]["best_threshold"])[:4] # type: ignore
                     models_metrics[model_name][mode][exit]['auc'].append(avg_auc)
                     models_metrics[model_name][mode][exit]['accuracy'].append(avg_acc)
                     models_metrics[model_name][mode][exit]['f1'].append(avg_f1)
@@ -99,7 +98,7 @@ def main(output_dir:str='../../output/'):
                 outputs, targets = models[model_name][mode][exit]
                 if mode == 'mcd_validation':
                     outputs = outputs.mean(2)
-                avg_auc, avg_f1, avg_acc, avg_recall, aucs, f1_scores, accuracies, recall = compute_metrics(outputs, targets, models[model_name]["best_threshold"]) # type: ignore
+                avg_auc, avg_f1, avg_acc, avg_recall = compute_metrics(outputs, targets, models[model_name]["best_threshold"])[:4] # type: ignore
                 models_metrics[model_name][mode][exit]['auc'] = avg_auc
                 models_metrics[model_name][mode][exit]['accuracy'] = avg_acc
                 models_metrics[model_name][mode][exit]['f1'] = avg_f1
@@ -134,18 +133,19 @@ def main(output_dir:str='../../output/'):
                         all_datas[model_name] += models_metrics[model_name][mode][exit][m]
             all_datas[model_name] = np.array(all_datas[model_name]) # type: ignore
         
-        
-        plot_cumulative_count(all_datas, # type: ignore
+        plot_cumulative_count(all_datas,
                               x_label=m.capitalize(), y_label='Number of Samples',
                               title=f'Cumulative Count of {m}',
                               save_file=True, filename=os.path.join(plt_dir, f'cumulative_count_{m}.png'))
 
 
-    mode = 'test'
-    diff_confidence = {model: {exit: compute_diff_and_confidence(models[model][mode][exit]) for exit in models[model][mode]} for model in models}
-    for model in diff_confidence:
-        plot_dictionary_subplots(diff_confidence[model], x_label='Confidence', y_label='Difference', super_title=model, out_dir=plt_dir,
-                             title_prefix='Difference vs Confidence for Exit', save_file=True)
+    modes = ['test', 'mcd_validation']
+    for mode in modes:
+        diff_confidence = {model: {exit: compute_diff_and_confidence(models[model][mode][exit], mcd=mode=="mcd_validation") for exit in models[model][mode]} for model in models}
+        for model in diff_confidence:
+            title = f'{mode} - Difference vs Confidence for Exit'
+            plot_dictionary_subplots(diff_confidence[model], x_label='Confidence', y_label='Difference', super_title=model, out_dir=plt_dir,
+                                title_prefix=title, save_file=True, filename=f'diff_confidence_{model}_{mode}.png')
         
     all_metrics = ['accuracy', 'auc', 'f1', 'recall']
     metric_confidence = {model: {metric : [] for metric in all_metrics} for model in models}
@@ -164,7 +164,7 @@ def main(output_dir:str='../../output/'):
                                                             y_lens[mode]))
                         
     plot_metric_vs_confidence(metric_confidence, 'accuracy', out_dir=plt_dir)
-        
+
         
 if __name__ == '__main__':
     import argparse

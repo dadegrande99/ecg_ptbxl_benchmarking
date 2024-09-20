@@ -62,6 +62,19 @@ def custom_entropy_formula_analysis(predictions, num_classes:int=2) -> float:
     return normalized_entropy
 
 def compute_metrics(outputs, targets, threshold=0.5) -> tuple[float, float, float, float, np.array, np.array, np.array, np.array]:  # type: ignore
+    """
+    This function computes the average AUC, F1 score, accuracy, and recall for the model outputs and target labels.
+
+    Parameters:
+    - outputs (torch.Tensor or np.ndarray): Model outputs.
+    - targets (torch.Tensor or np.ndarray): Target labels.
+    - threshold (float): Threshold for converting predictions into binary labels. Default is 0.5.
+
+    Returns:
+    - tuple[float, float, float, float, np.array, np.array, np.array, np.array]:
+        A tuple containing the average AUC, F1 score, accuracy, and recall, 
+        as well as the individual AUC, F1 score, accuracy, and recall values for each class.
+    """
     if isinstance(outputs, torch.Tensor):
         outputs = outputs.cpu().detach().numpy()
     if isinstance(targets, torch.Tensor):
@@ -100,7 +113,18 @@ def compute_metrics(outputs, targets, threshold=0.5) -> tuple[float, float, floa
 # Example usage would follow after defining the 'outputs' and 'targets' tensors.
 
 
-def compare_tensors(tensor_pair1, tensor_pair2) -> bool:
+def compare_tensors(tensor_pair1:tuple[torch.Tensor, torch.Tensor],
+                    tensor_pair2:tuple[torch.Tensor, torch.Tensor]) -> bool:
+    """
+    This function compares two pairs of tensors to check if they are equal.
+    
+    Parameters:
+    - tensor_pair1 (tuple[torch.Tensor, torch.Tensor]): Tuple containing the first pair of tensors.
+    - tensor_pair2 (tuple[torch.Tensor, torch.Tensor]): Tuple containing the second pair of tensors.
+    
+    Returns:
+    - bool: True if the tensors are equal, False otherwise.
+    """
     # retrieve pairs
     outputs_tensor1, targets_tensor1 = tensor_pair1
     outputs_tensor2, targets_tensor2 = tensor_pair2
@@ -111,7 +135,17 @@ def compare_tensors(tensor_pair1, tensor_pair2) -> bool:
     
     return outputs_equal and targets_equal
 
-def custom_entropy_per_sample(predictions, num_classes: int = 2):
+def custom_entropy_per_sample(predictions:np.ndarray, num_classes: int = 2) -> np.ndarray:
+    """
+    This function calculates the normalized entropy per sample for a given set of predictions.
+    
+    Parameters:
+    - predictions (np.ndarray): Array of model predictions.
+    - num_classes (int): Number of classes. Default is 2.
+
+    Returns:
+    - np.ndarray: Array of normalized entropy values per sample.
+    """
     # Ensure that values are between 1e-9 and 1 - 1e-9 to avoid log domain errors
     predictions = np.clip(predictions, 1e-9, 1 - 1e-9)
     entropy = -np.sum(predictions * np.log(predictions), axis=1)
@@ -125,11 +159,23 @@ def custom_entropy_per_sample(predictions, num_classes: int = 2):
     return normalized_entropy  # Returns an array of normalized entropy values per sample
 
 def custom_mcd_entropy_per_sample(predictions, num_classes: int = 2):
+    """
+    This function calculates the normalized entropy per sample for a given set of predictions.
+
+    Parameters:
+    - predictions (np.ndarray): Array of model predictions.
+    - num_classes (int): Number of classes. Default is 2.
+
+    Returns:
+    - np.ndarray: Array of normalized entropy values per sample
+    """
     predictions = np.clip(predictions, 1e-9, 1 - 1e-9)
-    predictions = np.mean(predictions)
+    print("predictions: ", predictions.shape)
+    predictions = np.mean(predictions, axis=2).squeeze()
+    print("predictions: ", predictions.shape)
     
     # Calculate entropy per sample
-    entropy = -np.sum(predictions * np.log(predictions), axis=2)
+    entropy = - predictions * np.log(predictions)
     
     # Maximum possible entropy when each class has equal probability
     max_entropy = np.log(num_classes)
@@ -140,27 +186,51 @@ def custom_mcd_entropy_per_sample(predictions, num_classes: int = 2):
     return normalized_entropy  # Returns an array of normalized entropy values per sample
 
 def variational_ratios(outputs):
+    """
+    This function calculates the variational ratios for a given set of model outputs.
 
-    pass
+    Parameters:
+    - outputs (torch.Tensor or np.ndarray): Model outputs.
+    
+    Returns:
+    - float: Variational ratio value.
+    """
+    # flatten the outputs (is a tensor or numpy array)
+    if isinstance(outputs, torch.Tensor):
+        outputs = outputs.cpu().detach().numpy()
+    outputs = outputs.flatten()
+
+    return 1 - np.mean(outputs)
 
 
 
-def compute_diff_and_confidence(outputs_targets_tuple, mcd = False):
+
+def compute_diff_and_confidence(outputs_targets_tuple:tuple[torch.Tensor, torch.Tensor], mcd:bool = False) -> list[tuple[float, float]]:
+    """
+    This function computes the difference between the model outputs and target labels, and the confidence of the model predictions.
+
+    Parameters:
+    - outputs_targets_tuple (tuple[torch.Tensor, torch.Tensor]): Tuple containing the model outputs and target labels.
+    - mcd (bool): Flag to indicate whether the model uses Monte Carlo Dropout, it change the entropy formula used. Default is False.
+
+    Returns:
+    - list[tuple[float, float]]: List of tuples containing the difference between the model outputs and target labels, and the confidence of the model predictions.
+    """
     if mcd:
         entropy_formula = custom_mcd_entropy_per_sample
     else:
-        entropy_formula = custom_entropy_per_sample 
+        entropy_formula = custom_entropy_per_sample
+
     outputs, targets = outputs_targets_tuple
     outputs_np = outputs.detach().cpu().numpy()
     targets_np = targets.detach().cpu().numpy()
     
-    p0 = 1 - outputs_np
-    probs = np.hstack((p0, outputs_np))
-    probs /= np.sum(probs, axis=1, keepdims=True)
-    
     # Calculate confidence as 1 - normalized entropy per sample
-    confidence = 1 - entropy_formula(probs)
+    confidence = 1 - entropy_formula(outputs_np)
+    print("confidence", confidence.shape)
     
+    if mcd:
+        outputs_np = outputs_np.mean(axis=1)
     diff = np.abs(outputs_np - targets_np).flatten()
     
     # Return list of tuples (difference, confidence)

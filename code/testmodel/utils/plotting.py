@@ -546,19 +546,30 @@ def plot_cumulative_count(data_dict, min_threshold=None, max_threshold=None,
     plt.close()
 
 
-def plot_accuracy_with_confidence(model_data, x_label='Tau', y_label='Accuracy on Examples', 
-                                  title='Model Accuracy as a Function of Tau', out_dir='./'):
+def plot_accuracy_with_confidence(model_data, x_label:str='Tau', y_label:str='Accuracy on Examples',
+                                  fig_size:tuple=(10, 6), dpi:int=100, grid:bool=True, save_file:bool=True,
+                                  legend:bool=True, filename:str='accuracy_with_confidence.png',
+                                  title:str='Model Accuracy as a Function of Tau', out_dir:str='./') -> None:
     """
-    Plots the accuracy and confidence intervals for different models as a function of tau.
-    
+    Plots the accuracy of models as a function of tau values, with confidence intervals.
+
     Parameters:
-    - model_data: Dictionary with model names as keys and tuples of (tau_values, accuracies, lower_bounds, upper_bounds) as values.
-    - x_label: Label for the x-axis.
-    - y_label: Label for the y-axis.
-    - title: Title of the plot.
-    - out_dir: Directory where the plot will be saved.
+    - model_data (dict): Dictionary with model names as keys and tuples of tau values, accuracies, lower bounds, and upper bounds as values.
+    - x_label (str): Label for the x-axis. Default is 'Tau'
+    - y_label (str): Label for the y-axis. Default is 'Accuracy on Examples'
+    - fig_size (tuple): Size of the figure in inches. Default is (10, 6)
+    - dpi (int): Resolution of the figure in dots per inch. Default is 100
+    - grid (bool): Whether to display a grid on the plot. Default is True
+    - save_file (bool): If True, saves the plot to a file; if False, displays the plot. Default is True
+    - legend (bool): Whether to display a legend on the plot. Default is True
+    - filename (str): Name of the file to save the plot. Default is 'accuracy_with_confidence.png'
+    - title (str): Title of the plot. Default is 'Model Accuracy as a Function of Tau'
+    - out_dir (str): Directory where the plot image will be saved. Default is the current working directory
+
+    Returns:
+    - None
     """
-    plt.figure(figsize=(10, 6))
+    plt.figure(figsize=fig_size, dpi=dpi)
     for model_name, (tau_values, accuracies, lower_bounds, upper_bounds) in model_data.items():
         plt.plot(tau_values, accuracies, label=model_name)
         plt.fill_between(tau_values, lower_bounds, upper_bounds, alpha=0.2)
@@ -566,18 +577,21 @@ def plot_accuracy_with_confidence(model_data, x_label='Tau', y_label='Accuracy o
     plt.title(title)
     plt.xlabel(x_label)
     plt.ylabel(y_label)
-    plt.legend()
-    plt.grid(True)
-    plt.savefig(f"{out_dir}/{title.replace(' ', '_').lower()}.png")
-    plt.show()
+    if legend:
+        plt.legend()
+    plt.grid(grid)
+    if save_file:
+        plt.savefig(f"{out_dir}/{filename}")
+        print(f'\033[3m{title}\033[0m saved to {filename}')
+    else:
+        plt.show()
+    plt.close()
 
 
-def plot_dictionary_subplots(data_dict: dict, super_title: str = 'Subplots for Dictionary',
-                             x_label: str = 'X-axis', y_label: str = 'Y-axis',
-                             title_prefix: str = 'Plot for Key', grid: bool = False,
-                             figsize: tuple = (10, 5), dpi: int = 100, marker_size: int = 10,
-                             save_file: bool = True, filename: str = "difference_plot.png",
-                             out_dir: str = "") -> None:
+def plot_dictionary_subplots(data_dict: dict, super_title: str = 'Subplots for Dictionary', x_label: str = 'X-axis',
+                             y_label: str = 'Y-axis', title_prefix: str = 'Plot for Key', grid: bool = False,
+                             figsize: tuple = (10, 5), dpi: int = 100, marker_size: int = 10, save_file: bool = True,
+                             filename: str = "difference_plot.png", out_dir: str = "") -> None:
     """
     Creates a figure with a subplot for each key-value pair in the input dictionary. Each subplot plots the data from the list of tuples, where the first element of each tuple is y, and the second is x.
 
@@ -617,6 +631,7 @@ def plot_dictionary_subplots(data_dict: dict, super_title: str = 'Subplots for D
         ax = axes[idx]
         y_values = [t[0] for t in value_list]
         x_values = [t[1] for t in value_list]
+        print(np.array(x_values).shape, np.array(y_values).shape)
         ax.scatter(x_values, y_values, marker='o', s=marker_size)  # Use scatter plot to plot points without connecting lines
         ax.set_xlabel(x_label)
         ax.set_ylabel(y_label)
@@ -637,21 +652,14 @@ def plot_dictionary_subplots(data_dict: dict, super_title: str = 'Subplots for D
             raise ValueError("Output directory 'out_dir' must be specified when 'save_file' is True.")
         plot_file = os.path.join(out_dir, filename)
         plt.savefig(plot_file)
-        print(f'Plot saved to {plot_file}')
+        print(f'\033[3m{super_title}\033[0m saved to {filename}')
     else:
         plt.show()
     plt.close()
 
-def plot_metric_vs_confidence(data_dict: dict, metric: str,
-                              min_confidence: float = 0.2,
-                              x_label: str = 'Confidence',
-                              title: str = "Metric vs Confidence",
-                              grid: bool = True,
-                              figsize: tuple = (12, 6),
-                              dpi: int = 100,
-                              save_file: bool = True,
-                              filename: str = "metric_vs_confidence.png",
-                              out_dir: str = "") -> None:
+def plot_metric_vs_confidence(data_dict: dict, metric: str, min_confidence: float = 0.2, x_label: str = 'Confidence',
+                              title: str = "Metric vs Confidence", grid: bool = True, figsize: tuple = (12, 6), dpi: int = 100,
+                              save_file: bool = True, filename: str = "metric_vs_confidence.png", out_dir: str = "") -> None:
     """
     Creates a single plot for all models. The x-axis represents confidence levels,
     and the y-axis shows the average of the specified metric for all data points with at least that confidence value.
@@ -754,7 +762,7 @@ def plot_metric_vs_confidence(data_dict: dict, metric: str,
             raise ValueError("Please specify 'out_dir' when 'save_file' is True.")
         plot_file = os.path.join(out_dir, filename)
         plt.savefig(plot_file)
-        print(f'Plot saved to {plot_file}')
+        print(f'\033[3m{title}\033[0m saved to {filename}')
     else:
         plt.show()
     plt.close()

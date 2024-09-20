@@ -44,7 +44,6 @@ def main():
     val_fold = config.get('val_fold', 10)
     dropout_rate = config.get('dropout_rate', 0.05)
     columns = config.get('columns', ['MI'])
-    columns = ["MI", "NORM"]
     early_stop: bool = config.get('early_stop', False)
     num_classes = len(columns)
 
@@ -87,7 +86,7 @@ def main():
 
     # Save the configuration file in the output directory
     with open(os.path.join(output_dir, 'config.json'), 'w') as f:
-        json.dump(config, f)
+        json.dump(config, f, indent=4)
 
     # split data
     train_df, val_df, test_df = split_data(
