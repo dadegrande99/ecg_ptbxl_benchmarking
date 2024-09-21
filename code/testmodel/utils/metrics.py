@@ -3,33 +3,63 @@ from sklearn.metrics import roc_auc_score, accuracy_score, f1_score, recall_scor
 import torch.nn.functional as F
 import torch.nn as nn
 import numpy as np
-import matplotlib 
 
-def compute_loss(output, target):
+
+def compute_loss(output: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+    """
+    This function computes the binary cross-entropy loss between the model outputs and target labels.
+
+    Parameters:
+    - output (torch.Tensor): Model outputs.
+    - target (torch.Tensor): Target labels.
+
+    Returns:
+    - torch.Tensor: Binary cross-entropy loss.
+    """
     loss_fn = nn.BCELoss()
 
     return loss_fn(output, target.float())
 
 
-def compute_loss_ee(outputs, target, weights:list = []):
+def compute_loss_ee(outputs: torch.Tensor, target: torch.Tensor, weights: list = []) -> torch.Tensor:
+    """
+    This function computes the ensemble entropy loss between the model outputs and target labels.
+
+    Parameters:
+    - outputs (list[torch.Tensor]): List of model outputs.
+    - target (torch.Tensor): Target labels.
+    - weights (list): List of weights for the ensemble entropy loss. Default is an empty list.
+
+    Returns:
+    - torch.Tensor: weighted average entropy loss.
+    """
     loss_fn = compute_loss
 
     if len(weights) == 0:
         weights = [1.0] * len(outputs)
     elif len(weights) < len(outputs):
         massimo = max(weights)
-        weights = [massimo if i >= len(weights) else weights[i] for i in range(len(outputs))]
+        weights = [massimo if i >= len(weights) else weights[i]
+                   for i in range(len(outputs))]
     elif len(weights) > len(outputs):
         weights = weights[:len(outputs)]
 
     losses = [loss_fn(output, target) for output in outputs]
-    
+
     return sum([losses[i] * weights[i] for i in range(len(outputs))]) / len(outputs)
 
 
-## Compuational cost ???
+def custom_entropy_formula(predictions: np.ndarray, num_classes: int = 2) -> float:
+    """
+    This function calculates the normalized entropy for a given set of predictions.
 
-def custom_entropy_formula(predictions, num_classes:int=2) -> float:
+    Parameters:
+    - predictions (np.ndarray): Array of model predictions.
+    - num_classes (int): Number of classes. Default is 2.
+
+    Returns:
+    - float: Normalized entropy value.
+    """
     # Ensure that values are between 1e-9 and 1 - 1e-9 to avoid log domain errors
     predictions = np.clip(predictions, 1e-9, 1 - 1e-9)
     entropy = -np.sum(predictions * np.log(predictions), axis=1)
@@ -40,10 +70,21 @@ def custom_entropy_formula(predictions, num_classes:int=2) -> float:
 
     return np.mean(entropy / max_entropy)
 
-def custom_entropy_formula_analysis(predictions, num_classes:int=2) -> float:
+
+def custom_entropy_formula_analysis(predictions: np.ndarray, num_classes: int = 2) -> float:
+    """
+    This function calculates the normalized entropy for a given set of predictions.
+
+    Parameters:
+    - predictions (np.ndarray): Array of model predictions.
+    - num_classes (int): Number of classes. Default is 2.
+
+    Returns:
+    - float: Normalized entropy value.
+    """
     # Ensure predictions are within the valid range for logarithms
     predictions = np.clip(predictions, 1e-9, 1 - 1e-9)
-    
+
     # If predictions are of shape (n, 1), assume binary classification and calculate the complementary probabilities
     if predictions.shape[1] == 1:
         complementary_predictions = 1 - predictions
@@ -51,7 +92,7 @@ def custom_entropy_formula_analysis(predictions, num_classes:int=2) -> float:
 
     # Normalize predictions to ensure they sum to 1 (if necessary)
     predictions /= np.sum(predictions, axis=1, keepdims=True)
-    
+
     # Calculate entropy
     entropy = -np.sum(predictions * np.log(predictions), axis=1)
 
@@ -61,7 +102,9 @@ def custom_entropy_formula_analysis(predictions, num_classes:int=2) -> float:
 
     return normalized_entropy
 
-def compute_metrics(outputs, targets, threshold=0.5) -> tuple[float, float, float, float, np.array, np.array, np.array, np.array]:  # type: ignore
+
+# type: ignore
+def compute_metrics(outputs, targets, threshold=0.5) -> tuple[float, float, float, float, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     This function computes the average AUC, F1 score, accuracy, and recall for the model outputs and target labels.
 
@@ -83,10 +126,10 @@ def compute_metrics(outputs, targets, threshold=0.5) -> tuple[float, float, floa
     if outputs.ndim == 1:
         outputs = outputs.reshape(-1, 1)
         targets = targets.reshape(-1, 1)
-    
+
     # Convert predictions into binary labels using the provided threshold
     preds = (outputs >= threshold).astype(int)
-    
+
     aucs = []
     f1_scores = []
     accuracies = []
@@ -95,50 +138,51 @@ def compute_metrics(outputs, targets, threshold=0.5) -> tuple[float, float, floa
         auc = roc_auc_score(targets[:, i], outputs[:, i])
         f1 = f1_score(targets[:, i], preds[:, i])
         accuracy = accuracy_score(targets[:, i], preds[:, i])
-        recall = recall_score(targets[:, i], preds[:, i]) 
-        
+        recall = recall_score(targets[:, i], preds[:, i])
+
         aucs.append(auc)
         f1_scores.append(f1)
         accuracies.append(accuracy)
-        recalls.append(recall) 
+        recalls.append(recall)
 
     # Calculate average metrics
     avg_auc = float(np.mean(aucs))
     avg_f1 = float(np.mean(f1_scores))
     avg_acc = float(np.mean(accuracies))
-    avg_recall = float(np.mean(recalls))  
-    
+    avg_recall = float(np.mean(recalls))
+
     return avg_auc, avg_f1, avg_acc, avg_recall, np.array(aucs), np.array(f1_scores), np.array(accuracies), np.array(recalls)
 
 # Example usage would follow after defining the 'outputs' and 'targets' tensors.
 
 
-def compare_tensors(tensor_pair1:tuple[torch.Tensor, torch.Tensor],
-                    tensor_pair2:tuple[torch.Tensor, torch.Tensor]) -> bool:
+def compare_tensors(tensor_pair1: tuple[torch.Tensor, torch.Tensor],
+                    tensor_pair2: tuple[torch.Tensor, torch.Tensor]) -> bool:
     """
     This function compares two pairs of tensors to check if they are equal.
-    
+
     Parameters:
     - tensor_pair1 (tuple[torch.Tensor, torch.Tensor]): Tuple containing the first pair of tensors.
     - tensor_pair2 (tuple[torch.Tensor, torch.Tensor]): Tuple containing the second pair of tensors.
-    
+
     Returns:
     - bool: True if the tensors are equal, False otherwise.
     """
     # retrieve pairs
     outputs_tensor1, targets_tensor1 = tensor_pair1
     outputs_tensor2, targets_tensor2 = tensor_pair2
-    
+
     # compare output & target
     outputs_equal = torch.equal(outputs_tensor1, outputs_tensor2)
     targets_equal = torch.equal(targets_tensor1, targets_tensor2)
-    
+
     return outputs_equal and targets_equal
 
-def custom_entropy_per_sample(predictions:np.ndarray, num_classes: int = 2) -> np.ndarray:
+
+def custom_entropy_per_sample(predictions: np.ndarray, num_classes: int = 2) -> np.ndarray:
     """
     This function calculates the normalized entropy per sample for a given set of predictions.
-    
+
     Parameters:
     - predictions (np.ndarray): Array of model predictions.
     - num_classes (int): Number of classes. Default is 2.
@@ -149,16 +193,17 @@ def custom_entropy_per_sample(predictions:np.ndarray, num_classes: int = 2) -> n
     # Ensure that values are between 1e-9 and 1 - 1e-9 to avoid log domain errors
     predictions = np.clip(predictions, 1e-9, 1 - 1e-9)
     entropy = -np.sum(predictions * np.log(predictions), axis=1)
-    
+
     # Maximum possible entropy when each class has equal probability
     max_entropy = np.log(num_classes)
-    
+
     # Normalized entropy per sample
     normalized_entropy = entropy / max_entropy
-    
+
     return normalized_entropy  # Returns an array of normalized entropy values per sample
 
-def custom_mcd_entropy_per_sample(predictions, num_classes: int = 2):
+
+def custom_mcd_entropy_per_sample(predictions: np.ndarray, num_classes: int = 2) -> np.ndarray:
     """
     This function calculates the normalized entropy per sample for a given set of predictions.
 
@@ -170,20 +215,19 @@ def custom_mcd_entropy_per_sample(predictions, num_classes: int = 2):
     - np.ndarray: Array of normalized entropy values per sample
     """
     predictions = np.clip(predictions, 1e-9, 1 - 1e-9)
-    print("predictions: ", predictions.shape)
     predictions = np.mean(predictions, axis=2).squeeze()
-    print("predictions: ", predictions.shape)
-    
+
     # Calculate entropy per sample
     entropy = - predictions * np.log(predictions)
-    
+
     # Maximum possible entropy when each class has equal probability
     max_entropy = np.log(num_classes)
-    
+
     # Normalized entropy per sample
     normalized_entropy = entropy / max_entropy
-    
+
     return normalized_entropy  # Returns an array of normalized entropy values per sample
+
 
 def variational_ratios(outputs):
     """
@@ -191,7 +235,7 @@ def variational_ratios(outputs):
 
     Parameters:
     - outputs (torch.Tensor or np.ndarray): Model outputs.
-    
+
     Returns:
     - float: Variational ratio value.
     """
@@ -203,9 +247,7 @@ def variational_ratios(outputs):
     return 1 - np.mean(outputs)
 
 
-
-
-def compute_diff_and_confidence(outputs_targets_tuple:tuple[torch.Tensor, torch.Tensor], mcd:bool = False) -> list[tuple[float, float]]:
+def compute_diff_and_confidence(outputs_targets_tuple: tuple[torch.Tensor, torch.Tensor], mcd: bool = False) -> list[tuple[float, float]]:
     """
     This function computes the difference between the model outputs and target labels, and the confidence of the model predictions.
 
@@ -224,14 +266,13 @@ def compute_diff_and_confidence(outputs_targets_tuple:tuple[torch.Tensor, torch.
     outputs, targets = outputs_targets_tuple
     outputs_np = outputs.detach().cpu().numpy()
     targets_np = targets.detach().cpu().numpy()
-    
+
     # Calculate confidence as 1 - normalized entropy per sample
     confidence = 1 - entropy_formula(outputs_np)
-    print("confidence", confidence.shape)
-    
+
     if mcd:
         outputs_np = outputs_np.mean(axis=1)
     diff = np.abs(outputs_np - targets_np).flatten()
-    
+
     # Return list of tuples (difference, confidence)
     return list(zip(diff, confidence))

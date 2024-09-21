@@ -5,11 +5,12 @@ import pandas as pd
 import seaborn as sns
 import os
 
-def plot_model_metrics(models_metrics, mode, out_dir:str="",
+
+def plot_model_metrics(models_metrics, mode, out_dir: str = "",
                        figsize: tuple = (14, 8), dpi: int = 100,
                        x_label: str = 'Epochs', y_label: str = 'Metric Values',
                        title_prefix: str = 'Metrics Over Epochs for', grid: bool = True,
-                       legend:bool=True, save_file:bool=True) -> None:
+                       legend: bool = True, save_file: bool = True) -> None:
     """
     Generates and displays line plots of various metrics over epochs for each model in `models_metrics`.
 
@@ -37,7 +38,8 @@ def plot_model_metrics(models_metrics, mode, out_dir:str="",
                 if metric == 'entropy':
                     continue
                 plt.plot(
-                    range(1, len(models_metrics[model][mode][exit][metric]) + 1),
+                    range(
+                        1, len(models_metrics[model][mode][exit][metric]) + 1),
                     models_metrics[model][mode][exit][metric],
                     label=f'{metric} - Exit {exit}'
                 )
@@ -47,7 +49,8 @@ def plot_model_metrics(models_metrics, mode, out_dir:str="",
         filename = f'{model}_{mode}_metrics.png'
         plt.title(title)
         plt.xlabel(x_label)
-        plt.xticks(range(1, len(models_metrics[model][mode][exit][metric]) + 1))
+        plt.xticks(
+            range(1, len(models_metrics[model][mode][exit][metric]) + 1))
         plt.ylabel(y_label)
         plt.grid(grid)
         if legend:
@@ -63,11 +66,11 @@ def plot_model_metrics(models_metrics, mode, out_dir:str="",
         plt.close()
 
 
-def plot_model_metrics2(models_metrics, out_dir:str="",
+def plot_model_metrics2(models_metrics, out_dir: str = "",
                         x_label: str = 'Epochs', y_label: str = 'Metric Values',
                         title_prefix: str = 'Metrics Over Epochs for', grid: bool = True,
                         figsize: tuple = (14, 8), dpi: int = 100,
-                        legend:bool=True, save_file:bool=True) -> None:
+                        legend: bool = True, save_file: bool = True) -> None:
     """
     Generates and displays line plots comparing training and validation metrics over epochs for each model in `models_metrics`
 
@@ -96,25 +99,29 @@ def plot_model_metrics2(models_metrics, out_dir:str="",
                 # Plot training metric with dashed line
                 mode = 'train'
                 line1, = plt.plot(
-                    range(1, len(models_metrics[model][mode][exit][metric]) + 1),
+                    range(
+                        1, len(models_metrics[model][mode][exit][metric]) + 1),
                     models_metrics[model][mode][exit][metric],
                     linestyle='--'
                 )
                 # Plot validation metric with the same color as training metric
                 mode = 'val'
                 plt.plot(
-                    range(1, len(models_metrics[model][mode][exit][metric]) + 1),
+                    range(
+                        1, len(models_metrics[model][mode][exit][metric]) + 1),
                     models_metrics[model][mode][exit][metric],
                     color=line1.get_color(),
-                    label=f'{metric}{exit} - Test {models_metrics[model]["test"][exit][metric]:.2f}'
+                    label=f'{metric}{
+                        exit} - Test {models_metrics[model]["test"][exit][metric]:.2f}'
                 )
-        
+
         filename = f'{model}_train_val_metrics.png'
         title = f'{title_prefix} {model} (Train vs Validation)'
-        
+
         # Add titles, labels, legends, and grid
         plt.xlabel(x_label)
-        plt.xticks(range(1, len(models_metrics[model][mode][exit][metric]) + 1))
+        plt.xticks(
+            range(1, len(models_metrics[model][mode][exit][metric]) + 1))
         plt.ylabel(y_label)
         plt.grid(grid)
         plt.title(title)
@@ -129,7 +136,7 @@ def plot_model_metrics2(models_metrics, out_dir:str="",
         else:
             plt.show()
         plt.close()
-    
+
 
 def compare_models_on_metric(models_metrics, metric_to_compare: str,
                              x_label: str = 'Epochs', y_label: str = 'Metric Values',
@@ -170,7 +177,8 @@ def compare_models_on_metric(models_metrics, metric_to_compare: str,
             range(1, val_epochs + 1),
             models_metrics[model]['val'][metric_to_compare],
             color=line1.get_color(),
-            label=f"{model} - Test: {models_metrics[model]['test'][metric_to_compare]:.2f}"
+            label=f"{
+                model} - Test: {models_metrics[model]['test'][metric_to_compare]:.2f}"
         )
 
     # Add titles, labels, legends, and grid
@@ -255,7 +263,8 @@ def compare_models_on_metrics(models_metrics, metric1: str, metric2: str,
             data_metric1_val,
             linestyle='-',
             color=color,
-            label=f"{model} - {metric1} ({mode}) - Test: {models_metrics[model]['test'][metric1]:.2f}"
+            label=f"{
+                model} - {metric1} ({mode}) - Test: {models_metrics[model]['test'][metric1]:.2f}"
         )
 
         # Plot metric2
@@ -268,7 +277,8 @@ def compare_models_on_metrics(models_metrics, metric1: str, metric2: str,
             data_metric2_val,
             linestyle='-',
             color=color,
-            label=f"{model} - {metric2} ({mode}) - Test: {models_metrics[model]['test'][metric2]:.2f}"
+            label=f"{
+                model} - {metric2} ({mode}) - Test: {models_metrics[model]['test'][metric2]:.2f}"
         )
 
     # Add titles, labels, legends, and grid
@@ -281,12 +291,11 @@ def compare_models_on_metrics(models_metrics, metric1: str, metric2: str,
     plt.show()
 
 
-def plot_exit_counts(count_exit, out_dir:str,
-                     x_label:str='Models', y_label:str='Exit Counts',
-                     title:str='Exit Counts by Model and Stage',
-                     fig_size:tuple=(10, 6), dpi:int=100,
-                     grid:bool=True, save_file:bool=True, filename:str='exit_counts.png') -> None:
-
+def plot_exit_counts(count_exit, out_dir: str,
+                     x_label: str = 'Models', y_label: str = 'Exit Counts',
+                     title: str = 'Exit Counts by Model and Stage',
+                     fig_size: tuple = (10, 6), dpi: int = 100,
+                     grid: bool = True, save_file: bool = True, filename: str = 'exit_counts.png') -> None:
     """
     Generates and saves a bar plot showing exit counts for different models and stages.
 
@@ -321,7 +330,8 @@ def plot_exit_counts(count_exit, out_dir:str,
     x = np.arange(len(models))
 
     for i, (stage, counts) in enumerate(exits_data.items()):
-        ax.bar(x + i * bar_width, counts, width=bar_width, label=f'Exit {stage}')
+        ax.bar(x + i * bar_width, counts,
+               width=bar_width, label=f'Exit {stage}')
 
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
@@ -379,17 +389,19 @@ def boxplot_metrics(metric: str, models_metrics: dict, out_dir: str,
                     for value in metric_values:
                         data.append({
                             x_label: model_name,
-                            hue_val: f'Exit {exit_number}',  # Labeling the exit
+                            # Labeling the exit
+                            hue_val: f'Exit {exit_number}',
                             'Value': value
                         })
-    
+
     df = pd.DataFrame(data)
-    
+
     if df.empty:
         print(f'No data available for {metric} to plot.')
         return
-    
-    title = f'Boxplot of {metric.capitalize()} by {hue_val.capitalize()} and {x_label.capitalize()}'
+
+    title = f'Boxplot of {metric.capitalize()} by {hue_val.capitalize()} and {
+        x_label.capitalize()}'
     filename = f'{metric}_boxplot.png'
 
     # Creating the boxplot using seaborn for easy and attractive visualization
@@ -403,7 +415,7 @@ def boxplot_metrics(metric: str, models_metrics: dict, out_dir: str,
         plt.legend(title=hue_val)
     else:
         plt.legend().remove()
-        
+
     if save_file:
         # Save the plot to the specified directory
         plot_file = os.path.join(out_dir, filename)
@@ -421,7 +433,7 @@ def barplot_metrics(metric: str, models_metrics: dict, out_dir: str,
                     save_file: bool = True) -> None:
     """
     Creates and saves a bar plot for the specified metric across different models, categorized by a hue variable
-    
+
     Parameters:
     - metric (str): The metric to plot
     - models_metrics (dict): Nested dictionary with model names as keys at the top level, and 'phases' dict which further maps to 'exits' dict containing metric values
@@ -452,10 +464,10 @@ def barplot_metrics(metric: str, models_metrics: dict, out_dir: str,
                     'Value': metric_values
                 })
 
-    
     df = pd.DataFrame(data)
-    
-    title = f'Barplot of {metric.capitalize()} by {hue_val.capitalize()} and {x_label.capitalize()}'
+
+    title = f'Barplot of {metric.capitalize()} by {hue_val.capitalize()} and {
+        x_label.capitalize()}'
     filename = f'{metric}_barplot.png'
 
     if df.empty:
@@ -474,7 +486,7 @@ def barplot_metrics(metric: str, models_metrics: dict, out_dir: str,
         plt.legend(title=hue_val)
     else:
         plt.legend().remove()
-        
+
     # Save the plot to the specified directory
     if save_file:
         plot_file = os.path.join(out_dir, filename)
@@ -488,8 +500,8 @@ def barplot_metrics(metric: str, models_metrics: dict, out_dir: str,
 def plot_cumulative_count(data_dict, min_threshold=None, max_threshold=None,
                           x_label='Threshold', y_label='Number of Samples',
                           title='Progressive Cumulative Count Above Each Threshold',
-                          fig_size:tuple=(10, 6), dpi:int=100,
-                          grid=True, legend:bool=True, save_file:bool=True, filename='cumulative_count.png'):
+                          fig_size: tuple = (10, 6), dpi: int = 100,
+                          grid=True, legend: bool = True, save_file: bool = True, filename='cumulative_count.png'):
     """
     Plots a progressive cumulative count of the number of data points exceeding each unique threshold
     for multiple models, using a common minimum threshold for all models.
@@ -518,13 +530,13 @@ def plot_cumulative_count(data_dict, min_threshold=None, max_threshold=None,
             min_threshold = np.min(all_data)
         if max_threshold is None:
             max_threshold = np.max(all_data)
-    
+
     plt.figure(figsize=fig_size, dpi=dpi)
     # Plot data for each model using the global min and max threshold
     for model_name, data in data_dict.items():
         thresholds = np.linspace(min_threshold, max_threshold, 100)
         counts = [np.sum(data > threshold) for threshold in thresholds]
-        
+
         plt.plot(thresholds, counts, label=model_name)
 
     plt.title(title)
@@ -546,10 +558,10 @@ def plot_cumulative_count(data_dict, min_threshold=None, max_threshold=None,
     plt.close()
 
 
-def plot_accuracy_with_confidence(model_data, x_label:str='Tau', y_label:str='Accuracy on Examples',
-                                  fig_size:tuple=(10, 6), dpi:int=100, grid:bool=True, save_file:bool=True,
-                                  legend:bool=True, filename:str='accuracy_with_confidence.png',
-                                  title:str='Model Accuracy as a Function of Tau', out_dir:str='./') -> None:
+def plot_accuracy_with_confidence(model_data, x_label: str = 'Tau', y_label: str = 'Accuracy on Examples',
+                                  fig_size: tuple = (10, 6), dpi: int = 100, grid: bool = True, save_file: bool = True,
+                                  legend: bool = True, filename: str = 'accuracy_with_confidence.png',
+                                  title: str = 'Model Accuracy as a Function of Tau', out_dir: str = './') -> None:
     """
     Plots the accuracy of models as a function of tau values, with confidence intervals.
 
@@ -573,7 +585,7 @@ def plot_accuracy_with_confidence(model_data, x_label:str='Tau', y_label:str='Ac
     for model_name, (tau_values, accuracies, lower_bounds, upper_bounds) in model_data.items():
         plt.plot(tau_values, accuracies, label=model_name)
         plt.fill_between(tau_values, lower_bounds, upper_bounds, alpha=0.2)
-    
+
     plt.title(title)
     plt.xlabel(x_label)
     plt.ylabel(y_label)
@@ -624,15 +636,17 @@ def plot_dictionary_subplots(data_dict: dict, super_title: str = 'Subplots for D
     # adjust the figure size based on the number of subplots
     figsize = (figsize[0], figsize[1] * nrows)
 
-    fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=figsize, dpi=dpi)
-    axes = axes.flatten() if num_plots > 1 else [axes]  # Ensure axes is iterable
+    fig, axes = plt.subplots(nrows=nrows, ncols=ncols,
+                             figsize=figsize, dpi=dpi)
+    axes = axes.flatten() if num_plots > 1 else [
+        axes]  # Ensure axes is iterable
 
     for idx, (key, value_list) in enumerate(data_dict.items()):
         ax = axes[idx]
         y_values = [t[0] for t in value_list]
         x_values = [t[1] for t in value_list]
-        print(np.array(x_values).shape, np.array(y_values).shape)
-        ax.scatter(x_values, y_values, marker='o', s=marker_size)  # Use scatter plot to plot points without connecting lines
+        # Use scatter plot to plot points without connecting lines
+        ax.scatter(x_values, y_values, marker='o', s=marker_size)
         ax.set_xlabel(x_label)
         ax.set_ylabel(y_label)
         ax.set_title(f'{title_prefix} {key}')
@@ -643,19 +657,23 @@ def plot_dictionary_subplots(data_dict: dict, super_title: str = 'Subplots for D
         fig.delaxes(axes[idx])
 
     plt.tight_layout()
-    plt.suptitle(super_title, y=1.02)  # Adjust the y position for the super title
+    # Adjust the y position for the super title
+    plt.suptitle(super_title, y=1.02)
 
     if save_file:
         if not filename:
-            raise ValueError("Filename must be provided when save_file is True.")
+            raise ValueError(
+                "Filename must be provided when save_file is True.")
         if not out_dir:
-            raise ValueError("Output directory 'out_dir' must be specified when 'save_file' is True.")
+            raise ValueError(
+                "Output directory 'out_dir' must be specified when 'save_file' is True.")
         plot_file = os.path.join(out_dir, filename)
         plt.savefig(plot_file)
         print(f'\033[3m{super_title}\033[0m saved to {filename}')
     else:
         plt.show()
     plt.close()
+
 
 def plot_metric_vs_confidence(data_dict: dict, metric: str, min_confidence: float = 0.2, x_label: str = 'Confidence',
                               title: str = "Metric vs Confidence", grid: bool = True, figsize: tuple = (12, 6), dpi: int = 100,
@@ -728,7 +746,8 @@ def plot_metric_vs_confidence(data_dict: dict, metric: str, min_confidence: floa
             weights = weights[mask]
 
         if len(confidence_values) == 0:
-            print(f"No data for model '{model_name}' above the minimum confidence.")
+            print(f"No data for model '{
+                  model_name}' above the minimum confidence.")
             continue
 
         avg_metric_values = []
@@ -738,7 +757,8 @@ def plot_metric_vs_confidence(data_dict: dict, metric: str, min_confidence: floa
             mask = confidence_values >= conf
             if np.any(mask):
                 # Compute weighted average of metric values
-                weighted_avg = np.average(metric_values[mask], weights=weights[mask])
+                weighted_avg = np.average(
+                    metric_values[mask], weights=weights[mask])
                 avg_metric_values.append(weighted_avg)
                 confidence_levels.append(conf)
 
@@ -759,7 +779,8 @@ def plot_metric_vs_confidence(data_dict: dict, metric: str, min_confidence: floa
         if not filename:
             filename = f'{metric}_vs_confidence.png'
         if not out_dir:
-            raise ValueError("Please specify 'out_dir' when 'save_file' is True.")
+            raise ValueError(
+                "Please specify 'out_dir' when 'save_file' is True.")
         plot_file = os.path.join(out_dir, filename)
         plt.savefig(plot_file)
         print(f'\033[3m{title}\033[0m saved to {filename}')
