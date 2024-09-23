@@ -3,6 +3,7 @@ from torch import nn
 import lightning as L
 from .model_base import BaseModelEE
 
+
 class InceptionModule(L.LightningModule):
     def __init__(self, in_channels, out_channels, dropout_rate=0.05):
         super().__init__()
@@ -42,14 +43,18 @@ class InceptionModule(L.LightningModule):
         outputs = [branch1, branch2, branch3, branch4]
         return torch.cat(outputs, 1)
 
+
 class Inception1D(BaseModelEE, L.LightningModule):
     def __init__(self, in_channels, num_classes, out_channels=32, dropout_rate=0.5, learning_rate=0.1):
         super(Inception1D, self).__init__(in_channels=in_channels, num_classes=num_classes,
                                           dropout_rate=dropout_rate, learning_rate=learning_rate)
-        self.modules_EE.append(InceptionModule(in_channels, out_channels, dropout_rate))
-        self.modules_EE.append(InceptionModule(out_channels*4, out_channels*2, dropout_rate))
+        self.modules_EE.append(InceptionModule(
+            in_channels, out_channels, dropout_rate))
+        self.modules_EE.append(InceptionModule(
+            out_channels*4, out_channels*2, dropout_rate))
         out_channels *= 2
-        self.modules_EE.append(InceptionModule(out_channels*4, out_channels*2, dropout_rate))
+        self.modules_EE.append(InceptionModule(
+            out_channels*4, out_channels*2, dropout_rate))
         out_channels *= 2
         self.global_avg_pool = nn.AdaptiveAvgPool1d(1)
         self.fc = nn.Sequential(
@@ -61,7 +66,8 @@ class Inception1D(BaseModelEE, L.LightningModule):
 
         # Add intermediate classifiers for early exits
         base = 7
-        self.exits = nn.ModuleList([nn.Linear(2**i, num_classes) for i in range(base, base+len(self.modules_EE))])  
+        self.exits = nn.ModuleList(
+            [nn.Linear(2**i, num_classes) for i in range(base, base+len(self.modules_EE))])
         # after inception1, output shape: [128, 128]
         # after inception2, output shape: [128, 256]
         # after inception3, output shape: [128, 512]
@@ -69,14 +75,11 @@ class Inception1D(BaseModelEE, L.LightningModule):
         self.weights_ee = [1.0] * (len(self.exits)+1)
         self.exits_used = [0] * (len(self.exits)+1)
 
-    
     def forward_intro(self, x):
         return x
 
-    
     def forward_final(self, x):
         x = self.global_avg_pool(x)
         x = x.view(x.size(0), -1)
         x = self.dropout(x)
         return torch.sigmoid(self.fc(x))
-    
