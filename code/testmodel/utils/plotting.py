@@ -634,7 +634,7 @@ def plot_dictionary_subplots(data_dict: dict, super_title: str = 'Subplots for D
     nrows = (num_plots + ncols - 1) // ncols  # Compute number of rows needed
 
     # adjust the figure size based on the number of subplots
-    figsize = (figsize[0], figsize[1] * nrows)
+    figsize = (figsize[0]*ncols, figsize[1] * nrows)
 
     fig, axes = plt.subplots(nrows=nrows, ncols=ncols,
                              figsize=figsize, dpi=dpi)
@@ -746,8 +746,8 @@ def plot_metric_vs_confidence(data_dict: dict, metric: str, min_confidence: floa
             weights = weights[mask]
 
         if len(confidence_values) == 0:
-            print(f"No data for model '{
-                  model_name}' above the minimum confidence.")
+            s = f"No data for model {model_name} above the minimum confidence."
+            print(s)
             continue
 
         avg_metric_values = []
@@ -784,6 +784,134 @@ def plot_metric_vs_confidence(data_dict: dict, metric: str, min_confidence: floa
         plot_file = os.path.join(out_dir, filename)
         plt.savefig(plot_file)
         print(f'\033[3m{title}\033[0m saved to {filename}')
+    else:
+        plt.show()
+    plt.close()
+
+
+def plot_metric_on_confidence(metric_confidence: dict[str, dict[str, list[tuple[float, float]]]],
+                              metric: str = "accuracy", super_title: str = '', grid: bool = True,
+                              min_conf: float = 0.0, max_conf: float = 1.0,
+                              fig_size: tuple[int, int] = (10, 5), dpi: int = 100,
+                              out_dir: str = "", file_name: str = "metric_vs_confidence.png", save_file: bool = False) -> None:
+    """
+    This function plots the metric values vs the confidence of the model predictions.
+
+    Parameters:
+    - metric_confidence (dict[str, dict[str, list[tuple[float, float]]]): Dictionary containing the metric values and confidence for each model.
+    - metric (str): Metric to plot. Default is 'accuracy'.
+    - super_title (str): Title for the entire figure. Default is ''.
+    - grid (bool): Flag to indicate whether to show grid. Default is True.
+    - min_conf (float): Minimum confidence value to plot. Default is 0.0.
+    - max_conf (float): Maximum confidence value to plot. Default is 1.0.
+    - fig_size (tuple[int, int]): Figure size. Default is (10, 5).
+    - dpi (int): Dots per inch (resolution). Default is 100.
+    - out_dir (str): Output directory to save the plot. Default is "".
+    - file_name (str): Filename to save the plot. Default is "metric_vs_confidence.png".
+    - save_file (bool): Flag to indicate whether to save the plot. Default is False.
+
+    Returns:
+    - None
+    """
+    ncols = min(2, len(metric_confidence))
+    nrows = len(metric_confidence) // ncols
+    fig_size = (fig_size[0] * ncols, fig_size[1] * nrows)
+    fig, axs = plt.subplots(nrows=nrows, ncols=ncols,
+                            figsize=fig_size, dpi=dpi)
+    if super_title == '':
+        super_title = f'{metric.capitalize()} vs Confidence'
+    fig.suptitle(super_title, fontsize=16)
+    axs = axs.flatten() if len(metric_confidence) > 1 else [axs]
+
+    for i, (model, data) in enumerate(metric_confidence.items()):
+        ax = axs[i]
+        ax.set_title(model)
+        for exit, values in data.items():
+            # limit to min_max on x
+            x_y = [(x, y) for x, y in values if min_conf <= x <= max_conf]
+            x, y = zip(*x_y)
+
+            ax.plot(x, y, label=f'Exit {exit}')
+        ax.set_xlabel('Confidence')
+        ax.set_ylabel(metric.capitalize())
+        ax.grid(grid)
+        ax.legend()
+
+    plt.tight_layout()
+    plt.subplots_adjust(top=0.9)
+
+    if save_file:
+        if not file_name:
+            raise ValueError(
+                "Filename must be provided when save_file is True.")
+        if not out_dir:
+            raise ValueError(
+                "Output directory 'out_dir' must be specified when 'save_file' is True.")
+        plot_file = os.path.join(out_dir, file_name)
+        plt.savefig(plot_file)
+        print(f'\033[3m{super_title}\033[0m saved to {file_name}')
+    else:
+        plt.show()
+    plt.close()
+
+
+def plot_metric_trend(metric_trend: dict[str, dict[str, tuple[list, list, float]]],
+                      metric: str = "accuracy", super_title: str = "", grid: bool = True,
+                      fig_size: tuple[int, int] = (10, 5), dpi: int = 100,
+                      out_dir: str = "", file_name: str = "", save_file: bool = False) -> None:
+    """
+    This function plots the metric values for two different modes.
+
+    Parameters:
+    - metric_trend (dict[str, dict[str, tuple[list, list, float]]]): Dictionary containing the metric values for two different modes.
+    - metric (str): Metric to plot. Default is 'accuracy'.
+    - title (str): Title of the plot. Default is "".
+    - grid (bool): Flag to indicate whether to show grid. Default is True.
+    - fig_size (tuple[int, int]): Figure size. Default is (10, 5).
+    - dpi (int): Dots per inch (resolution). Default is 100.
+    - out_dir (str): Output directory to save the plot. Default is "".
+    - file_name (str): Filename to save the plot. Default is "".
+    - save_file (bool): Flag to indicate whether to save the plot. Default is False.
+
+    Returns:
+    - None
+    """
+    ncols = min(2, len(metric_trend))
+    nrows = len(metric_trend) // ncols
+    fig_size = (fig_size[0]*ncols, fig_size[1] * nrows)
+    fig, axs = plt.subplots(nrows=nrows, ncols=ncols,
+                            figsize=fig_size, dpi=dpi)
+    if super_title == "":
+        super_title = f'{metric.capitalize()} Trend'
+    fig.suptitle(super_title, fontsize=16)
+    axs = axs.flatten() if len(metric_trend) > 1 else [axs]
+
+    for i, (model, data) in enumerate(metric_trend.items()):
+        ax = axs[i]
+        ax.set_title(model)
+        for exit, values in data.items():
+            train, val, test = values
+            # val nedd to be the same color as train
+            line1 = ax.plot(train, label=f'Exit {exit} - {test:.2f}')
+            ax.plot(val, linestyle='dashed', color=line1[0].get_color())
+        ax.set_xlabel('Epoch')
+        ax.set_ylabel(metric.capitalize())
+        ax.grid(grid)
+        ax.legend()
+
+    plt.tight_layout()
+    plt.subplots_adjust(top=0.9)
+
+    if save_file:
+        if not file_name:
+            raise ValueError(
+                "Filename must be provided when save_file is True.")
+        if not out_dir:
+            raise ValueError(
+                "Output directory 'out_dir' must be specified when 'save_file' is True.")
+        plot_file = os.path.join(out_dir, file_name)
+        plt.savefig(plot_file)
+        print(f'\033[3m{super_title}\033[0m saved to {file_name}')
     else:
         plt.show()
     plt.close()

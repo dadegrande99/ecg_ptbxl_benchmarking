@@ -271,8 +271,73 @@ def compute_diff_and_confidence(outputs_targets_tuple: tuple[torch.Tensor, torch
     confidence = 1 - entropy_formula(outputs_np)
 
     if mcd:
-        outputs_np = outputs_np.mean(axis=1)
-    diff = np.abs(outputs_np - targets_np).flatten()
+        outputs_np = outputs_np.mean(axis=2)
+    diff = np.abs(outputs_np - targets_np)
 
     # Return list of tuples (difference, confidence)
     return list(zip(diff, confidence))
+
+
+def metrics_per_confidence(outputs_targets_tuple: tuple[torch.Tensor, torch.Tensor], metric: str = "accuracy", mcd: bool = False, step: float = 0.05, threshold: float = 0.5) -> list[tuple[float, float]]:
+    """
+    This function computes the specified metric for different confidence levels.
+
+    Parameters:
+    - outputs_targets_tuple (tuple[torch.Tensor, torch.Tensor]): Tuple containing the model outputs and target labels.
+    - metric (str): Metric to compute. Default is "accuracy".
+    - mcd (bool): Flag to indicate whether the model uses Monte Carlo Dropout. Default is False.
+    - step (float): Step size for confidence levels. Default is 0.05.
+    - threshold (float): Threshold for converting predictions into binary labels. Default is 0.5.
+
+    Returns:
+    - list[tuple[float, float]]: List of tuples containing the confidence levels and the corresponding metric values.
+    """
+    # Check if the metric is supported and select the appropriate function
+    metric = metric.lower()
+    if metric not in ['accuracy', 'auc', 'f1', 'recall']:
+        raise ValueError(f"metric {metric} not supported")
+    if metric == 'accuracy':
+        metric_func = accuracy_score
+    elif metric == 'auc':
+        metric_func = roc_auc_score
+    elif metric == 'f1':
+        metric_func = f1_score
+    else:
+        metric_func = recall_score
+
+    # Select the appropriate entropy formula based on the model type
+    if mcd:
+        entropy_formula = custom_mcd_entropy_per_sample
+    else:
+        entropy_formula = custom_entropy_per_sample
+
+    # Generate confidence levels based on the specified step size
+    step_check = np.arange(0, 1, step)
+    outputs, targets = outputs_targets_tuple
+    outputs_np = outputs.detach().cpu().numpy()
+    targets_np = targets.detach().cpu().numpy()
+
+    confidence = 1 - entropy_formula(outputs_np)
+    min_confidence = confidence.min()
+    max_confidence = confidence.max()
+
+    if mcd:
+        outputs_np = outputs_np.mean(axis=2)
+
+    if outputs_np.ndim == 1:
+        outputs_np = outputs_np.reshape(-1, 1)
+        targets_np = targets_np.reshape(-1, 1)
+
+    outputs_np = (outputs_np >= threshold).astype(int)
+    targets_np = targets_np.astype(int)
+
+    metric_values = []
+    for step in step_check:
+        covered = confidence <= step
+        if step < min_confidence:
+            metric_values.append((float(step), 0.0))
+        elif step <= max_confidence:
+            metric_values.append((float(step), metric_func(
+                targets_np[covered], outputs_np[covered])))
+
+    return metric_values
