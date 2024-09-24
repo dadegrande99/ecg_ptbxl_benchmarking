@@ -38,6 +38,19 @@ class BaseModelEE(ABC, L.LightningModule):
         self.exits_used = []
         self.all_results = {}
 
+    ######################################################## Configure ########################################################
+
+    def configure_optimizers(self) -> optim.Optimizer:
+        """
+        Configure the optimizer for the model
+
+        Returns:
+        - torch.optim.Optimizer: Optimizer for the model
+        """
+        return optim.Adam(self.parameters(), lr=self.learning_rate)
+
+    ######################################################## Forward ########################################################
+
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, ...]:
         """
         Forward pass of the model
@@ -120,7 +133,6 @@ class BaseModelEE(ABC, L.LightningModule):
         Returns:
         - torch.Tensor: Output tensor of the final part
         """
-
         pass
 
     def should_exit(self, predictions: torch.Tensor, threshold: float) -> bool:
@@ -137,6 +149,23 @@ class BaseModelEE(ABC, L.LightningModule):
         predictions_np = predictions.detach().cpu().numpy()
         entropy = custom_entropy_formula(predictions_np)
         return entropy < threshold
+
+    def predict_step(self, batch: tuple, batch_idx: int, dataloader_idx: int = None) -> torch.Tensor:
+        """
+        Predict step of the model, composed of the forward pass
+
+        Parameters:
+        - batch (tuple): Tuple containing the inputs and the targets
+        - batch_idx (int): Index of the batch
+        - dataloader_idx (int): Index of the dataloader
+
+        Returns:
+        - torch.Tensor: Predictions of the model
+        """
+        inputs, target = batch
+        return self.model(inputs, target)
+
+    ######################################################## Dropout ########################################################
 
     def turn_on_dropout(self) -> None:
         """
@@ -156,6 +185,8 @@ class BaseModelEE(ABC, L.LightningModule):
         """
         self.dropout = nn.Dropout(p=0)
 
+    ######################################################## Training ########################################################
+
     def on_train_start(self) -> None:
         """
         Turn off the dropout layer at the beginning of the training
@@ -163,7 +194,7 @@ class BaseModelEE(ABC, L.LightningModule):
         Returns:
         - None
         """
-        self.turn_off_dropout()
+        self.turn_on_dropout()
         return super().on_train_start()
 
     def training_step(self, batch: tuple, batch_idx: int) -> torch.Tensor:
@@ -241,6 +272,8 @@ class BaseModelEE(ABC, L.LightningModule):
                          self.all_results["train"][f"exit_{i}"][key][-1])
 
         self.training_outputs.clear()
+
+    ######################################################## Validation ########################################################
 
     def on_validation_start(self) -> None:
         """
@@ -360,6 +393,8 @@ class BaseModelEE(ABC, L.LightningModule):
 
         self.validation_outputs.clear()
 
+    ######################################################## Testing ########################################################
+
     def on_test_start(self) -> None:
         """
         Turn on the dropout layer at the beginning of the test
@@ -444,29 +479,7 @@ class BaseModelEE(ABC, L.LightningModule):
 
         self.test_outputs.clear()
 
-    def configure_optimizers(self):
-        """
-        Configure the optimizer for the model
-
-        Returns:
-        - torch.optim.Optimizer: Optimizer for the model
-        """
-        return optim.Adam(self.parameters(), lr=self.learning_rate)
-
-    def predict_step(self, batch: tuple, batch_idx: int, dataloader_idx: int = None) -> torch.Tensor:
-        """
-        Predict step of the model, composed of the forward pass
-
-        Parameters:
-        - batch (tuple): Tuple containing the inputs and the targets
-        - batch_idx (int): Index of the batch
-        - dataloader_idx (int): Index of the dataloader
-
-        Returns:
-        - torch.Tensor: Predictions of the model
-        """
-        inputs, target = batch
-        return self.model(inputs, target)
+    ######################################################## Monte Carlo Dropout ########################################################
 
     def mcd_validation(self, mcd_loader, targets=None, num_tests: int = 5, save: bool = True, output_dir: str = "mcd_validation") -> tuple[dict, dict]:
         """
@@ -535,8 +548,6 @@ class BaseModelEE(ABC, L.LightningModule):
         outputs_df = {}
         for key in outputs:
             num_tests = len(outputs[key])
-            # Stack outputs to shape (N, D, num_tests)
-            # Shape: (N, D, num_tests)
             outputs_array = np.stack(outputs[key], axis=-1)
             N, D, num_tests = outputs_array.shape
 
@@ -546,9 +557,8 @@ class BaseModelEE(ABC, L.LightningModule):
                 row = {}
                 for d in range(D):
                     # Collect outputs across tests for data point n, dimension d
-                    # Shape: (num_tests,)
                     outputs_list = outputs_array[n, d, :]
-                    outputs_list = outputs_list.tolist()    # Convert to list
+                    outputs_list = outputs_list.tolist()
                     # Assign to the appropriate column
                     row[f'output_{d+1}'] = outputs_list
                 # Add target values
@@ -596,6 +606,8 @@ class BaseModelEE(ABC, L.LightningModule):
         pbar.close()  # Close progress bar
 
         return (self.all_results[dir_name], outputs_df)
+
+    ######################################################## Save ########################################################
 
     def save_values(self, path=None, save: bool = True) -> dict:
         """
