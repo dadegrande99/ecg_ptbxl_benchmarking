@@ -229,24 +229,6 @@ def custom_mcd_entropy_per_sample(predictions: np.ndarray, num_classes: int = 2)
     return normalized_entropy  # Returns an array of normalized entropy values per sample
 
 
-def variational_ratios(outputs):
-    """
-    This function calculates the variational ratios for a given set of model outputs.
-
-    Parameters:
-    - outputs (torch.Tensor or np.ndarray): Model outputs.
-
-    Returns:
-    - float: Variational ratio value.
-    """
-    # flatten the outputs (is a tensor or numpy array)
-    if isinstance(outputs, torch.Tensor):
-        outputs = outputs.cpu().detach().numpy()
-    outputs = outputs.flatten()
-
-    return 1 - np.mean(outputs)
-
-
 def compute_diff_and_confidence(outputs_targets_tuple: tuple[torch.Tensor, torch.Tensor], mcd: bool = False) -> list[tuple[float, float]]:
     """
     This function computes the difference between the model outputs and target labels, and the confidence of the model predictions.
@@ -274,7 +256,6 @@ def compute_diff_and_confidence(outputs_targets_tuple: tuple[torch.Tensor, torch
         outputs_np = outputs_np.mean(axis=2)
     diff = np.abs(outputs_np - targets_np)
 
-    # Return list of tuples (difference, confidence)
     return list(zip(diff, confidence))
 
 
@@ -311,12 +292,11 @@ def metrics_per_confidence(outputs_targets_tuple: tuple[torch.Tensor, torch.Tens
     else:
         entropy_formula = custom_entropy_per_sample
 
-    # Generate confidence levels based on the specified step size
-    step_check = np.arange(0, 1, step)
     outputs, targets = outputs_targets_tuple
     outputs_np = outputs.detach().cpu().numpy()
     targets_np = targets.detach().cpu().numpy()
 
+    # Generate confidence levels based on the specified step size
     confidence = 1 - entropy_formula(outputs_np)
     min_confidence = confidence.min()
     max_confidence = confidence.max()
@@ -327,10 +307,10 @@ def metrics_per_confidence(outputs_targets_tuple: tuple[torch.Tensor, torch.Tens
     if outputs_np.ndim == 1:
         outputs_np = outputs_np.reshape(-1, 1)
         targets_np = targets_np.reshape(-1, 1)
-
     outputs_np = (outputs_np >= threshold).astype(int)
     targets_np = targets_np.astype(int)
 
+    step_check = np.arange(0, 1, step)
     metric_values = []
     for step in step_check:
         covered = confidence <= step
@@ -341,3 +321,47 @@ def metrics_per_confidence(outputs_targets_tuple: tuple[torch.Tensor, torch.Tens
                 targets_np[covered], outputs_np[covered])))
 
     return metric_values
+
+
+def variational_ratios(outputs):
+    """
+    This function calculates the variational ratios for a given set of model outputs.
+
+    Parameters:
+    - outputs (torch.Tensor or np.ndarray): Model outputs.
+
+    Returns:
+    - float: Variational ratio value.
+    """
+    # flatten the outputs (is a tensor or numpy array)
+    if isinstance(outputs, torch.Tensor):
+        outputs = outputs.cpu().detach().numpy()
+    outputs = outputs.flatten()
+
+    return 1 - np.mean(outputs)
+
+
+def compute_diff_and_variational(outputs_targets_tuple: tuple[torch.Tensor, torch.Tensor], mcd: bool = False) -> list[tuple[float, float]]:
+    """
+    This function computes the difference between the model outputs and target labels, and the variational ration of the model predictions.
+
+    Parameters:
+    - outputs_targets_tuple (tuple[torch.Tensor, torch.Tensor]): Tuple containing the model outputs and target labels.
+    - mcd (bool): Flag to indicate whether the model uses Monte Carlo Dropout. Default is False.
+
+    Returns:
+    - list[tuple[float, float]]: List of tuples containing the difference between the model outputs and target labels, and the confidence of the model predictions.
+    """
+
+    outputs, targets = outputs_targets_tuple
+    outputs_np = outputs.detach().cpu().numpy()
+    targets_np = targets.detach().cpu().numpy()
+
+    # Calculate confidence as 1 - normalized entropy per sample
+    variational_ratios = variational_ratios(outputs_np)
+
+    if mcd:
+        outputs_np = outputs_np.mean(axis=2)
+    diff = np.abs(outputs_np - targets_np)
+
+    return list(zip(diff, variational_ratios))
