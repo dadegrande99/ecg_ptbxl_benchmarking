@@ -17,7 +17,21 @@ import warnings
 warnings.filterwarnings("ignore")
 
 
-def main(output_dir: str = '../../output/', save_plots: bool = True):
+def main(output_dir: str = '../../output/', save_plots: bool = True) -> None:
+    """
+    Main function to analyze the results of the models.
+    - Load the configuration of the experiments.
+    - Load the models and the metrics.
+    - Compute the metrics for the models.
+    - Plot the results.
+
+    Parameters
+    - output_dir (str): Directory where to save the results. Default is '../../output/'
+    - save_plots (bool): if True, save the plots, otherwise, show the plots. Default is True.
+
+    Returns
+    - None
+    """
     # configuration for the experiments
     with open(f'{output_dir}config.json', 'r') as f:
         config = json.load(f)
@@ -204,11 +218,9 @@ def main(output_dir: str = '../../output/', save_plots: bool = True):
                     metric_confidence[model][exit] = metrics_per_confidence(
                         models[model][mode][exit], metric=metric, step=0.05, mcd=mode == "mcd_validation", threshold=models[model]["best_threshold"])
             super_title = "Monte Carlo Dropout" if mode == "mcd_validation" else "Test"
-            super_title = f'{super_title} - 
-            {metric.capitalize()} on Confidence'
+            super_title += f' - {metric.capitalize()} on Confidence'
             plot_metric_on_confidence(metric_confidence, metric=metric, file_name=f'{mode}_{metric}', super_title=super_title,
                                       out_dir=plt_dir, save_file=save_plots, min_conf=0.5)
-            
 
     metric = 'accuracy'
     compare_modes = ('train', 'val', 'test')
@@ -217,10 +229,12 @@ def main(output_dir: str = '../../output/', save_plots: bool = True):
         metric_trend[model] = {}
         for exit in models_metrics[model][compare_modes[0]]:
             metric_trend[model][exit] = (models_metrics[model][compare_modes[0]][exit][metric],
-                                        models_metrics[model][compare_modes[1]][exit][metric],
-                                        models_metrics[model][compare_modes[2]][exit][metric])
-    plot_metric_trend(metric_trend, metric=metric, super_title='Train vs Validation', out_dir=plt_dir, save_file=save_plots, file_name='train_vs_val.png')
-            
+                                         models_metrics[model][compare_modes[1]
+                                                               ][exit][metric],
+                                         models_metrics[model][compare_modes[2]][exit][metric])
+    plot_metric_trend(metric_trend, metric=metric, super_title='Train vs Validation',
+                      out_dir=plt_dir, save_file=save_plots, file_name='train_vs_val.png')
+
     print("\n\nDone!")
 
 
@@ -229,8 +243,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Analysis of all models.')
     parser.add_argument('-o', '--output-dir', type=str,
                         default='../../output/', help='Directory to save the results')
-    parser.add_argument('s', '--save', type=bool,
+    parser.add_argument('-s', '--save', type=bool,
                         default=True, help='Save the results')
     args = parser.parse_args()
     output_dir = args.output_dir if args.output_dir[-1] == '/' else args.output_dir + '/'
-    main(output_dir, args.save_plots)
+    output_dir = "../../outputs/0920MI/"
+    main(output_dir, args.save)
