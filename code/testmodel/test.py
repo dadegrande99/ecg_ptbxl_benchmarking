@@ -158,4 +158,5 @@ if __name__ == '__main__':
     parser.add_argument('-c', '--config', type=str, default='config.json',
                         help='Path to the configuration file')
     args = parser.parse_args()
-    main(args.data_dir, args.output_dir, args.config)
+    output_dir = args.output_dir if args.output_dir[-1] == '/' else args.output_dir + '/'
+    main(args.data_dir, output_dir, args.config)

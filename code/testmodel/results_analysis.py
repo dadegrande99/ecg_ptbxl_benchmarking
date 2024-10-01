@@ -268,10 +268,10 @@ def main(output_dir: str = '../../output/', save_plots: bool = True) -> None:
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description='Analysis of all models.')
-    parser.add_argument('-o', '--output-dir', type=str,
-                        default='../../output/', help='Directory to save the results')
-    parser.add_argument('-s', '--save', type=bool,
-                        default=True, help='Save the results')
+    parser.add_argument('-o', '--output-dir', type=str, default='../../output/',
+                        help='Directory to save the results')
+    parser.add_argument('-s', '--save', type=bool, default=True,
+                        help='Save the results')
     args = parser.parse_args()
     output_dir = args.output_dir if args.output_dir[-1] == '/' else args.output_dir + '/'
     main(output_dir, args.save)
