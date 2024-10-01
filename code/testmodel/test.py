@@ -9,24 +9,25 @@ from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 import torch
 import lightning as L
 
-def main():
-    # Parse the arguments
-    parser = argparse.ArgumentParser(description='Train and test models.')
-    parser.add_argument('-d', '--data-dir', type=str, default='../../data/ptbxl/',
-                        help='Directory containing the ptbxl data')
-    parser.add_argument('-o', '--output-dir', type=str,
-                        default='../../output/', help='Directory to save the results')
-    parser.add_argument('-c', '--config', type=str,
-                        default='config.json', help='Path to the configuration file')
-    args = parser.parse_args()
 
+def main(data_dir: str = '../../data/ptbxl/', output_dir: str = '../../output/',
+         config_path: str = 'config.json') -> None:
+    """
+    Main function to train and test the models.
+
+    Parameters
+    - data_dir (str): The directory containing the ptbxl data.
+    - output_dir (str): The directory to save the results.
+    - config_path (str): The path to the configuration file.
+
+    Returns
+    - None
+    """
     # Check if the data directory exists
-    data_dir = args.data_dir
     if not os.path.isdir(data_dir):
         raise DataDirectoryError(data_dir)
 
     # Load the configuration file
-    config_path = args.config
     if os.path.isfile(config_path):
         with open(config_path, 'r') as f:
             config = json.load(f)
@@ -68,17 +69,18 @@ def main():
     before = len(ptbxl)
     # reduces data to NORM or MI
     ptbxl = ptbxl[ptbxl['NORM'] + ptbxl['MI'] == 1]
-    print(f"Data reduced from {before} to {len(ptbxl)} samples (-{round((before-len(ptbxl))/before,2)}%).")
+    print(f'Data reduced from {before} to {len(ptbxl)} samples '
+          f'(-{round((before-len(ptbxl))/before, 2)}%).')
 
     # Create the output directory
     print("\nCreating output directory if not exist...")
-    output_dir = args.output_dir
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
         print(f"Output directory '{output_dir}' created.")
     if not os.path.isdir(f'{output_dir}/models'):
         os.makedirs(f'{output_dir}/models')
-        print(f"Model directory '{os.path.join(output_dir, "models")}' created.")
+        p = os.path.join(output_dir, 'models')
+        print(f"Model directory '{p}' created.")
     if not os.path.isdir(f'{output_dir}/data'):
         os.makedirs(f'{output_dir}/data')
         print(f"Data directory '{os.path.join(output_dir, "data")}' created.")
@@ -91,7 +93,7 @@ def main():
     # split data
     train_df, val_df, test_df = split_data(
         ptbxl, folds=[train_fold, val_fold, test_fold])
-    
+
     # Save the split data
     train_df[columns].to_csv(os.path.join(
         output_dir, 'data', 'y_training.csv'), index=False)
@@ -101,7 +103,7 @@ def main():
         output_dir, 'data', 'y_test.csv'), index=False)
 
     # create DataLoaders
-    train_loader = get_dataloader( train_df['raw_data'].tolist(), train_df[columns].values, 
+    train_loader = get_dataloader(train_df['raw_data'].tolist(), train_df[columns].values,
                                   batch_size=batch_size, in_channels=in_channels)
     val_loader = get_dataloader(val_df['raw_data'].tolist(), val_df[columns].values,
                                 batch_size=batch_size,  in_channels=in_channels, shuffle=False)
@@ -111,10 +113,13 @@ def main():
     for model_name, ModelClass in MODEL_LIST:
         print(f"\n\n\nPrepare settings for {model_name} ...")
         callbacks = []
-        model = ModelClass(in_channels=in_channels, num_classes=num_classes, dropout_rate=dropout_rate, learning_rate=learning_rate)
+        model = ModelClass(in_channels=in_channels, num_classes=num_classes,
+                           dropout_rate=dropout_rate, learning_rate=learning_rate)
         if early_stop:
-            callbacks.append(EarlyStopping(monitor="val_avg_auc", min_delta=0.00, patience=3, verbose=False, mode="max"))
-        trainer = L.Trainer(limit_train_batches=batch_size, max_epochs=num_epochs, callbacks=callbacks, devices=1, default_root_dir=os.path.abspath(f'{output_dir}/models/{model_name}'))
+            callbacks.append(EarlyStopping(
+                monitor="val_avg_auc", min_delta=0.00, patience=3, verbose=False, mode="max"))
+        trainer = L.Trainer(limit_train_batches=batch_size, max_epochs=num_epochs, callbacks=callbacks,
+                            devices=1, default_root_dir=os.path.abspath(f'{output_dir}/models/{model_name}'))
 
         print(f"\n\nTraining model {model_name} ...\n")
         with torch.no_grad():
@@ -122,13 +127,18 @@ def main():
 
         print(f"\n\nMonteCarloDropout Validation - {model_name} ...\n")
         mcd_results, _ = model.mcd_validation(test_loader)
-        print(json.dumps(mcd_results, indent=4))
+        for exit in mcd_results:
+            print(f'{exit}')
+            for metric in mcd_results[exit]:
+                print(f'\t{metric}: {mcd_results[exit][metric][0]}')
+            print()
 
         print(f"\n\nTesting model {model_name} ...\n")
         trainer.test(model, test_loader)
-        
+
         print(f"\n\nSaving results of {model_name} ...\n")
-        trainer.save_checkpoint(f'{output_dir}/models/{model_name}/checkpoint.ckpt')
+        trainer.save_checkpoint(
+            f'{output_dir}/models/{model_name}/checkpoint.ckpt')
         model.save_values()
         model.save_results()
         print()
@@ -136,7 +146,16 @@ def main():
     print("Done!")
     print("\n\n\nAnalyzing results ...\n")
     analyze_results(output_dir)
-        
+
 
 if __name__ == '__main__':
-    main()
+    # Parse the arguments
+    parser = argparse.ArgumentParser(description='Train and test models.')
+    parser.add_argument('-d', '--data-dir', type=str, default='../../data/ptbxl/',
+                        help='Directory containing the ptbxl data')
+    parser.add_argument('-o', '--output-dir', type=str, default='../../output/',
+                        help='Directory to save the results')
+    parser.add_argument('-c', '--config', type=str, default='config.json',
+                        help='Path to the configuration file')
+    args = parser.parse_args()
+    main(args.data_dir, args.output_dir, args.config)
