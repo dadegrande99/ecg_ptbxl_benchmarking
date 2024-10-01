@@ -5,6 +5,10 @@ import pandas as pd
 import seaborn as sns
 import os
 
+plt.style.use([s for s in plt.style.available if 'whitegrid' in s][0])
+plt.rcParams['figure.figsize'] = [16, 9]
+plt.rcParams['figure.dpi'] = 100
+
 
 def plot_model_metrics(models_metrics, mode, out_dir: str = "",
                        figsize: tuple = (14, 8), dpi: int = 100,

@@ -2,6 +2,7 @@ import numpy as np
 from utils.metrics import (
     compute_metrics, compute_diff_and_confidence, metrics_per_confidence,
     custom_entropy_formula_analysis as custom_entropy_formula,
+    compute_diff_and_variational
 )
 from utils import list_directories, create_tensors_from_dataframe, find_files_with_extension
 from utils.plotting import (
@@ -32,6 +33,9 @@ def main(output_dir: str = '../../output/', save_plots: bool = True) -> None:
     Returns
     - None
     """
+    # check if the output directory exists
+    if not os.path.exists(output_dir):
+        raise FileNotFoundError(f"Directory {output_dir} does not exist.")
     # configuration for the experiments
     with open(f'{output_dir}config.json', 'r') as f:
         config = json.load(f)
@@ -185,6 +189,14 @@ def main(output_dir: str = '../../output/', save_plots: bool = True) -> None:
             plot_dictionary_subplots(diff_confidence[model], x_label='Confidence', y_label='Difference', super_title=model, out_dir=plt_dir,
                                      title_prefix=title, save_file=save_plots, filename=f'diff_confidence_{model}_{mode}.png')
 
+    mode = 'mcd_validation'
+    diff_var = {model: {exit: compute_diff_and_variational(
+        models[model][mode][exit], mcd=mode == "mcd_validation") for exit in models[model][mode]} for model in models}
+    for model in diff_var:
+        title = f'Error vs Variation ratios for Exit'
+        plot_dictionary_subplots(diff_var[model], x_label='Variation ratios', y_label='Difference', super_title=f'{model} - {mode}', out_dir=plt_dir,
+                                 title_prefix=title, save_file=save_plots, filename=f'diff_var_{model}_{mode}.png')
+
     all_metrics = ['accuracy', 'auc', 'f1', 'recall']
     metric_confidence = {model: {metric: []
                                  for metric in all_metrics} for model in models}
@@ -222,6 +234,21 @@ def main(output_dir: str = '../../output/', save_plots: bool = True) -> None:
             plot_metric_on_confidence(metric_confidence, metric=metric, file_name=f'{mode}_{metric}', super_title=super_title,
                                       out_dir=plt_dir, save_file=save_plots, min_conf=0.5)
 
+    mode = 'mcd_validation'
+    metrics = ['accuracy', 'auc', 'f1', 'recall']
+    for metric in metrics:
+        metric_confidence = {}
+        for model in models:
+            metric_confidence[model] = {}
+            for exit in models[model][mode]:
+                metric_confidence[model][exit] = metrics_per_confidence(models[model][mode][exit], metric=metric, uncertainty="varational_ratio",
+                                                                        step=0.05, mcd=True, threshold=models[model]["best_threshold"])
+        super_title = "Monte Carlo Dropout" if mode == "mcd_validation" else "Test"
+        super_title += f' - {metric.capitalize()} on Confidence'
+        super_title += ' - Variational Ratio'
+        plot_metric_on_confidence(metric_confidence, metric=metric, file_name=f'{mode}_{metric}_var-ratio', super_title=super_title,
+                                  out_dir=plt_dir, save_file=save_plots, min_conf=0.5)
+
     metric = 'accuracy'
     compare_modes = ('train', 'val', 'test')
     metric_trend = {}
@@ -247,5 +274,4 @@ if __name__ == '__main__':
                         default=True, help='Save the results')
     args = parser.parse_args()
     output_dir = args.output_dir if args.output_dir[-1] == '/' else args.output_dir + '/'
-    output_dir = "../../outputs/0920MI/"
     main(output_dir, args.save)

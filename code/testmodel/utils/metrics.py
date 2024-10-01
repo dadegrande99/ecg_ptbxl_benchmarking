@@ -229,7 +229,8 @@ def custom_mcd_entropy_per_sample(predictions: np.ndarray, num_classes: int = 2)
     return normalized_entropy  # Returns an array of normalized entropy values per sample
 
 
-def compute_diff_and_confidence(outputs_targets_tuple: tuple[torch.Tensor, torch.Tensor], mcd: bool = False) -> list[tuple[float, float]]:
+def compute_diff_and_confidence(outputs_targets_tuple: tuple[torch.Tensor, torch.Tensor],
+                                mcd: bool = False) -> list[tuple[float, float]]:
     """
     This function computes the difference between the model outputs and target labels, and the confidence of the model predictions.
 
@@ -259,13 +260,17 @@ def compute_diff_and_confidence(outputs_targets_tuple: tuple[torch.Tensor, torch
     return list(zip(diff, confidence))
 
 
-def metrics_per_confidence(outputs_targets_tuple: tuple[torch.Tensor, torch.Tensor], metric: str = "accuracy", mcd: bool = False, step: float = 0.05, threshold: float = 0.5) -> list[tuple[float, float]]:
+def metrics_per_confidence(outputs_targets_tuple: tuple[torch.Tensor, torch.Tensor],
+                           metric: str = "accuracy", uncertainty: str = "entropy",
+                           mcd: bool = False, step: float = 0.05,
+                           threshold: float = 0.5) -> list[tuple[float, float]]:
     """
     This function computes the specified metric for different confidence levels.
 
     Parameters:
     - outputs_targets_tuple (tuple[torch.Tensor, torch.Tensor]): Tuple containing the model outputs and target labels.
     - metric (str): Metric to compute. Default is "accuracy".
+    - uncertainty (str): Uncertainty measure to use for computing confidence levels. Default is "entropy".
     - mcd (bool): Flag to indicate whether the model uses Monte Carlo Dropout. Default is False.
     - step (float): Step size for confidence levels. Default is 0.05.
     - threshold (float): Threshold for converting predictions into binary labels. Default is 0.5.
@@ -286,18 +291,24 @@ def metrics_per_confidence(outputs_targets_tuple: tuple[torch.Tensor, torch.Tens
     else:
         metric_func = recall_score
 
-    # Select the appropriate entropy formula based on the model type
-    if mcd:
-        entropy_formula = custom_mcd_entropy_per_sample
+    uncertainty = uncertainty.lower()
+    uncertainty = uncertainty.replace(" ", "_")
+    if uncertainty not in ['entropy', 'varational_ratio']:
+        raise ValueError(f"uncertainty {uncertainty} not supported")
+    elif uncertainty == 'entropy':
+        if mcd:
+            uncertainty_formula = custom_mcd_entropy_per_sample
+        else:
+            uncertainty_formula = custom_entropy_per_sample
     else:
-        entropy_formula = custom_entropy_per_sample
+        uncertainty_formula = variational_ratios
 
     outputs, targets = outputs_targets_tuple
     outputs_np = outputs.detach().cpu().numpy()
     targets_np = targets.detach().cpu().numpy()
 
     # Generate confidence levels based on the specified step size
-    confidence = 1 - entropy_formula(outputs_np)
+    confidence = 1 - uncertainty_formula(outputs_np)
     min_confidence = confidence.min()
     max_confidence = confidence.max()
 
@@ -323,25 +334,33 @@ def metrics_per_confidence(outputs_targets_tuple: tuple[torch.Tensor, torch.Tens
     return metric_values
 
 
-def variational_ratios(outputs):
+def variational_ratios(outputs, threshold: float = 0.5) -> float:
     """
     This function calculates the variational ratios for a given set of model outputs.
 
     Parameters:
     - outputs (torch.Tensor or np.ndarray): Model outputs.
+    - threshold (float): Threshold value to consider a prediction as positive. Default is 0.5.
 
     Returns:
     - float: Variational ratio value.
     """
-    # flatten the outputs (is a tensor or numpy array)
+
     if isinstance(outputs, torch.Tensor):
         outputs = outputs.cpu().detach().numpy()
-    outputs = outputs.flatten()
+    preds = (outputs >= threshold).astype(int)
 
-    return 1 - np.mean(outputs)
+    var_rat = []
+    for el in preds:
+        positive = el.flatten().sum()
+        moda = max(positive, len(el.flatten()) - positive)
+        var_rat.append(1 - moda / len(el.flatten()))
+
+    return np.array(var_rat)
 
 
-def compute_diff_and_variational(outputs_targets_tuple: tuple[torch.Tensor, torch.Tensor], mcd: bool = False) -> list[tuple[float, float]]:
+def compute_diff_and_variational(outputs_targets_tuple: tuple[torch.Tensor, torch.Tensor],
+                                 mcd: bool = False, threshold: float = 0.5) -> list[tuple[float, float]]:
     """
     This function computes the difference between the model outputs and target labels, and the variational ration of the model predictions.
 
@@ -357,11 +376,10 @@ def compute_diff_and_variational(outputs_targets_tuple: tuple[torch.Tensor, torc
     outputs_np = outputs.detach().cpu().numpy()
     targets_np = targets.detach().cpu().numpy()
 
-    # Calculate confidence as 1 - normalized entropy per sample
-    variational_ratios = variational_ratios(outputs_np)
+    var_ratios = variational_ratios(outputs_np, threshold)
 
     if mcd:
         outputs_np = outputs_np.mean(axis=2)
     diff = np.abs(outputs_np - targets_np)
 
-    return list(zip(diff, variational_ratios))
+    return list(zip(diff, var_ratios))
