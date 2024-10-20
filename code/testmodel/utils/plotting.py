@@ -14,7 +14,7 @@ def plot_model_metrics(models_metrics, mode, out_dir: str = "",
                        figsize: tuple = (14, 8), dpi: int = 100,
                        x_label: str = 'Epochs', y_label: str = 'Metric Values',
                        title_prefix: str = 'Metrics Over Epochs for', grid: bool = True,
-                       legend: bool = True, save_file: bool = True) -> None:
+                       legend: bool = True, save_file: bool = True, formato: str = "pdf") -> None:
     """
     Generates and displays line plots of various metrics over epochs for each model in `models_metrics`.
 
@@ -30,6 +30,7 @@ def plot_model_metrics(models_metrics, mode, out_dir: str = "",
     - grid (bool): Whether to display a grid on the plot. Default is True
     - legend (bool): Whether to display a legend on the plot. Default is True
     - save_file (bool): If True, saves the plot to a file; if False, displays the plot. Default is True
+    - formato (str): Format of the saved file. Default is 'pdf'
 
     Returns:
     - None
@@ -50,7 +51,7 @@ def plot_model_metrics(models_metrics, mode, out_dir: str = "",
 
         # Add titles, labels, legends, and grid
         title = f'{title_prefix} {model} ({mode.capitalize()})'
-        filename = f'{model}_{mode}_metrics.png'
+        filename = f'{model}_{mode}_metrics.{formato}'
         plt.title(title)
         plt.xlabel(x_label)
         plt.xticks(
@@ -63,7 +64,7 @@ def plot_model_metrics(models_metrics, mode, out_dir: str = "",
         else:
             plt.legend().remove()
         if save_file:
-            plt.savefig(os.path.join(out_dir, filename))
+            plt.savefig(os.path.join(out_dir, filename), format=formato)
             print(f'Plot \033[3m{title}\033[0m saved to {filename}')
         else:
             plt.show()
@@ -74,7 +75,7 @@ def plot_model_metrics2(models_metrics, out_dir: str = "",
                         x_label: str = 'Epochs', y_label: str = 'Metric Values',
                         title_prefix: str = 'Metrics Over Epochs for', grid: bool = True,
                         figsize: tuple = (14, 8), dpi: int = 100,
-                        legend: bool = True, save_file: bool = True) -> None:
+                        legend: bool = True, save_file: bool = True, formato: str = "pdf") -> None:
     """
     Generates and displays line plots comparing training and validation metrics over epochs for each model in `models_metrics`
 
@@ -89,6 +90,7 @@ def plot_model_metrics2(models_metrics, out_dir: str = "",
     - dpi (int): Dots per inch (resolution) of the figure. Default is 100
     - legend (bool): Whether to display a legend on the plot. Default is True
     - save_file (bool): If True, saves the plot to a file; if False, displays the plot. Default is True
+    - formato (str): Format of the saved file. Default is 'pdf'
 
     Returns:
     - None
@@ -119,7 +121,7 @@ def plot_model_metrics2(models_metrics, out_dir: str = "",
                         exit} - Test {models_metrics[model]["test"][exit][metric]:.2f}'
                 )
 
-        filename = f'{model}_train_val_metrics.png'
+        filename = f'{model}_train_val_metrics.{formato}'
         title = f'{title_prefix} {model} (Train vs Validation)'
 
         # Add titles, labels, legends, and grid
@@ -135,7 +137,7 @@ def plot_model_metrics2(models_metrics, out_dir: str = "",
         else:
             plt.legend().remove()
         if save_file:
-            plt.savefig(os.path.join(out_dir, filename))
+            plt.savefig(os.path.join(out_dir, filename), format=formato)
             print(f'Plot \033[3m{title}\033[0m saved to {filename}')
         else:
             plt.show()
@@ -298,8 +300,8 @@ def compare_models_on_metrics(models_metrics, metric1: str, metric2: str,
 def plot_exit_counts(count_exit, out_dir: str,
                      x_label: str = 'Models', y_label: str = 'Exit Counts',
                      title: str = 'Exit Counts by Model and Stage',
-                     fig_size: tuple = (10, 6), dpi: int = 100,
-                     grid: bool = True, save_file: bool = True, filename: str = 'exit_counts.png') -> None:
+                     fig_size: tuple = (10, 6), dpi: int = 100, grid: bool = True,
+                     save_file: bool = True, filename: str = 'exit_counts.png', formato: str = 'pdf') -> None:
     """
     Generates and saves a bar plot showing exit counts for different models and stages.
 
@@ -316,6 +318,7 @@ def plot_exit_counts(count_exit, out_dir: str,
     - grid (bool): Whether to display a grid on the plot. Default is True
     - save_file (bool): If True, saves the plot to a file; if False, displays the plot. Default is True
     - filename (str): Name of the file to save the plot. Default is 'exit_counts.png'
+    - formato (str): Format of the saved file. Default is 'pdf'
 
     Returns:
     - None
@@ -345,8 +348,12 @@ def plot_exit_counts(count_exit, out_dir: str,
     ax.grid(grid)
     ax.legend()
 
+    # check the extension of the filename and change it if necessary
+    if not filename.endswith(formato):
+        filename = filename.split('.')[0] + '.' + formato
+
     if save_file:
-        plt.savefig(os.path.join(out_dir, filename))
+        plt.savefig(os.path.join(out_dir, filename), format=format)
         print(f'Plot \033[3m{title}\033[0m saved to {filename}')
     else:
         plt.show()
@@ -358,7 +365,7 @@ def boxplot_metrics(metric: str, models_metrics: dict, out_dir: str,
                     x_label: str = 'Model', hue_val: str = "Exit",
                     grid: bool = True, legend: bool = False,
                     figsize: tuple = (12, 6), dpi: int = 100,
-                    save_file: bool = True) -> None:
+                    save_file: bool = True, formato: str = 'pdf') -> None:
     """
     Creates and saves a boxplot for the specified metric across different models, categorized by exits.
 
@@ -373,6 +380,7 @@ def boxplot_metrics(metric: str, models_metrics: dict, out_dir: str,
     - figsize (tuple): Figure size in inches as a tuple (width, height). Default is (12, 6)
     - dpi (int): Dots per inch (resolution) of the figure. Default is 100
     - save_file (bool): If True, saves the plot to a file; if False, displays the plot. Default is True
+    - formato (str): Format of the saved file. Default is 'pdf'
 
     Returns:
     - None
@@ -406,7 +414,7 @@ def boxplot_metrics(metric: str, models_metrics: dict, out_dir: str,
 
     title = f'Boxplot of {metric.capitalize()} by {hue_val.capitalize()} and {
         x_label.capitalize()}'
-    filename = f'{metric}_boxplot.png'
+    filename = f'{metric}_boxplot.{formato}'
 
     # Creating the boxplot using seaborn for easy and attractive visualization
     plt.figure(figsize=figsize, dpi=dpi)
@@ -423,7 +431,7 @@ def boxplot_metrics(metric: str, models_metrics: dict, out_dir: str,
     if save_file:
         # Save the plot to the specified directory
         plot_file = os.path.join(out_dir, filename)
-        plt.savefig(plot_file)
+        plt.savefig(plot_file, format=formato)
         print(f'\033[3m{title}\033[0m saved to {plot_file}')
     else:
         plt.show()
@@ -434,7 +442,7 @@ def barplot_metrics(metric: str, models_metrics: dict, out_dir: str,
                     x_label: str = 'Model', hue_val: str = "Exit",
                     grid: bool = True, legend: bool = False,
                     figsize: tuple = (12, 6), dpi: int = 100,
-                    save_file: bool = True) -> None:
+                    save_file: bool = True, formato: str = 'pdf') -> None:
     """
     Creates and saves a bar plot for the specified metric across different models, categorized by a hue variable
 
@@ -449,6 +457,7 @@ def barplot_metrics(metric: str, models_metrics: dict, out_dir: str,
     - figsize (tuple): Figure size in inches as a tuple (width, height). Default is (12, 6)
     - dpi (int): Dots per inch (resolution) of the figure. Default is 100
     - save_file (bool): If True, saves the plot to a file; if False, displays the plot. Default is True
+    - formato (str): Format of the saved file. Default is 'pdf'
 
     Returns:
     - None
@@ -472,7 +481,7 @@ def barplot_metrics(metric: str, models_metrics: dict, out_dir: str,
 
     title = f'Barplot of {metric.capitalize()} by {hue_val.capitalize()} and {
         x_label.capitalize()}'
-    filename = f'{metric}_barplot.png'
+    filename = f'{metric}_barplot.{formato}'
 
     if df.empty:
         print(f'No data available for {metric} to plot.')
@@ -494,7 +503,7 @@ def barplot_metrics(metric: str, models_metrics: dict, out_dir: str,
     # Save the plot to the specified directory
     if save_file:
         plot_file = os.path.join(out_dir, filename)
-        plt.savefig(plot_file)
+        plt.savefig(plot_file, format=formato)
         print(f'\033[3m{title}\033[0m saved to {plot_file}')
     else:
         plt.show()
@@ -504,8 +513,8 @@ def barplot_metrics(metric: str, models_metrics: dict, out_dir: str,
 def plot_cumulative_count(data_dict, min_threshold=None, max_threshold=None,
                           x_label='Threshold', y_label='Number of Samples',
                           title='Progressive Cumulative Count Above Each Threshold',
-                          fig_size: tuple = (10, 6), dpi: int = 100,
-                          grid=True, legend: bool = True, save_file: bool = True, filename='cumulative_count.png'):
+                          fig_size: tuple = (10, 6), dpi: int = 100, grid=True, legend: bool = True,
+                          save_file: bool = True, filename='cumulative_count', formato: str = 'pdf') -> None:
     """
     Plots a progressive cumulative count of the number of data points exceeding each unique threshold
     for multiple models, using a common minimum threshold for all models.
@@ -523,6 +532,7 @@ def plot_cumulative_count(data_dict, min_threshold=None, max_threshold=None,
     - legend: whether to display a legend on the plot.
     - save_file: if True, saves the plot to a file; otherwise, displays the plot.
     - filename: name of the file to save the plot to.
+    - formato: format of the saved file.
 
     Returns:
     - None
@@ -552,9 +562,13 @@ def plot_cumulative_count(data_dict, min_threshold=None, max_threshold=None,
     else:
         plt.legend().remove()
 
+    # check the extension of the filename and change it if necessary
+    if not filename.endswith(formato):
+        filename = filename.split('.')[0] + '.' + formato
+
     # Save the plot or display it
     if save_file:
-        plt.savefig(filename)
+        plt.savefig(filename, format=formato)
         print(f'\033[3m{title}\033[0m saved to {filename}')
     else:
         plt.show()
@@ -564,8 +578,9 @@ def plot_cumulative_count(data_dict, min_threshold=None, max_threshold=None,
 
 def plot_accuracy_with_confidence(model_data, x_label: str = 'Tau', y_label: str = 'Accuracy on Examples',
                                   fig_size: tuple = (10, 6), dpi: int = 100, grid: bool = True, save_file: bool = True,
-                                  legend: bool = True, filename: str = 'accuracy_with_confidence.png',
-                                  title: str = 'Model Accuracy as a Function of Tau', out_dir: str = './') -> None:
+                                  legend: bool = True, filename: str = 'accuracy_with_confidence',
+                                  title: str = 'Model Accuracy as a Function of Tau', out_dir: str = './',
+                                  formato: str = 'pdf') -> None:
     """
     Plots the accuracy of models as a function of tau values, with confidence intervals.
 
@@ -581,6 +596,7 @@ def plot_accuracy_with_confidence(model_data, x_label: str = 'Tau', y_label: str
     - filename (str): Name of the file to save the plot. Default is 'accuracy_with_confidence.png'
     - title (str): Title of the plot. Default is 'Model Accuracy as a Function of Tau'
     - out_dir (str): Directory where the plot image will be saved. Default is the current working directory
+    - formato (str): Format of the saved file. Default is 'pdf'
 
     Returns:
     - None
@@ -596,8 +612,10 @@ def plot_accuracy_with_confidence(model_data, x_label: str = 'Tau', y_label: str
     if legend:
         plt.legend()
     plt.grid(grid)
+    if not filename.endswith(formato):
+        filename = filename.split('.')[0] + '.' + formato
     if save_file:
-        plt.savefig(f"{out_dir}/{filename}")
+        plt.savefig(f"{out_dir}/{filename}", format=formato)
         print(f'\033[3m{title}\033[0m saved to {filename}')
     else:
         plt.show()
@@ -607,7 +625,7 @@ def plot_accuracy_with_confidence(model_data, x_label: str = 'Tau', y_label: str
 def plot_dictionary_subplots(data_dict: dict, super_title: str = 'Subplots for Dictionary', x_label: str = 'X-axis',
                              y_label: str = 'Y-axis', title_prefix: str = 'Plot for Key', grid: bool = False,
                              figsize: tuple = (10, 5), dpi: int = 100, marker_size: int = 10, save_file: bool = True,
-                             filename: str = "difference_plot.png", out_dir: str = "") -> None:
+                             filename: str = "difference_plot", out_dir: str = "", formato: str = 'pdf') -> None:
     """
     Creates a figure with a subplot for each key-value pair in the input dictionary. Each subplot plots the data from the list of tuples, where the first element of each tuple is y, and the second is x.
 
@@ -623,6 +641,7 @@ def plot_dictionary_subplots(data_dict: dict, super_title: str = 'Subplots for D
     - save_file (bool): If True, saves the plot to a file; if False, displays the plot. Default is True
     - filename (str): Name of the file to save the plot. Required if save_file is True
     - out_dir (str): Directory where the plot image will be saved if save_file is True. Required if save_file is True
+    - formato (str): Format of the saved file. Default is 'pdf'
 
     Returns:
     - None
@@ -664,6 +683,9 @@ def plot_dictionary_subplots(data_dict: dict, super_title: str = 'Subplots for D
     # Adjust the y position for the super title
     plt.suptitle(super_title, y=1.02)
 
+    if not filename.endswith(formato):
+        filename = filename.split('.')[0] + '.' + formato
+
     if save_file:
         if not filename:
             raise ValueError(
@@ -672,16 +694,18 @@ def plot_dictionary_subplots(data_dict: dict, super_title: str = 'Subplots for D
             raise ValueError(
                 "Output directory 'out_dir' must be specified when 'save_file' is True.")
         plot_file = os.path.join(out_dir, filename)
-        plt.savefig(plot_file)
+        plt.savefig(plot_file, format=formato)
         print(f'\033[3m{super_title}\033[0m saved to {filename}')
     else:
         plt.show()
     plt.close()
 
 
-def plot_metric_vs_confidence(data_dict: dict, metric: str, min_confidence: float = 0.2, x_label: str = 'Confidence',
-                              title: str = "Metric vs Confidence", grid: bool = True, figsize: tuple = (12, 6), dpi: int = 100,
-                              save_file: bool = True, filename: str = "metric_vs_confidence.png", out_dir: str = "") -> None:
+def plot_metric_vs_confidence(data_dict: dict, metric: str, min_confidence: float = 0.2,
+                              x_label: str = 'Confidence', title: str = "Metric vs Confidence",
+                              grid: bool = True, figsize: tuple = (12, 6), dpi: int = 100,
+                              save_file: bool = True, filename: str = "metric_vs_confidence.png",
+                              out_dir: str = "", formato: str = 'pdf') -> None:
     """
     Creates a single plot for all models. The x-axis represents confidence levels,
     and the y-axis shows the average of the specified metric for all data points with at least that confidence value.
@@ -701,6 +725,7 @@ def plot_metric_vs_confidence(data_dict: dict, metric: str, min_confidence: floa
     - save_file (bool): If True, saves the plot to a file; if False, displays the plot. Default is True.
     - filename (str): Name of the file to save the plot. Default is 'metric_vs_confidence.png'.
     - out_dir (str): Directory where the plot image will be saved if save_file is True. Required if save_file is True.
+    - formato (str): Format of the saved file. Default is 'pdf'.
 
     Returns:
     - None
@@ -781,12 +806,14 @@ def plot_metric_vs_confidence(data_dict: dict, metric: str, min_confidence: floa
 
     if save_file:
         if not filename:
-            filename = f'{metric}_vs_confidence.png'
+            filename = f'{metric}_vs_confidence.{formato}'
+        elif not filename.endswith(formato):
+            filename = filename.split('.')[0] + '.' + formato
         if not out_dir:
             raise ValueError(
                 "Please specify 'out_dir' when 'save_file' is True.")
         plot_file = os.path.join(out_dir, filename)
-        plt.savefig(plot_file)
+        plt.savefig(plot_file, format=formato)
         print(f'\033[3m{title}\033[0m saved to {filename}')
     else:
         plt.show()
@@ -797,7 +824,8 @@ def plot_metric_on_confidence(metric_confidence: dict[str, dict[str, list[tuple[
                               metric: str = "accuracy", super_title: str = '', grid: bool = True,
                               min_conf: float = 0.0, max_conf: float = 1.0,
                               fig_size: tuple[int, int] = (10, 5), dpi: int = 100,
-                              out_dir: str = "", file_name: str = "metric_vs_confidence.png", save_file: bool = False) -> None:
+                              out_dir: str = "", file_name: str = "metric_vs_confidence.png",
+                              save_file: bool = False, formato: str = 'pdf') -> None:
     """
     This function plots the metric values vs the confidence of the model predictions.
 
@@ -813,6 +841,7 @@ def plot_metric_on_confidence(metric_confidence: dict[str, dict[str, list[tuple[
     - out_dir (str): Output directory to save the plot. Default is "".
     - file_name (str): Filename to save the plot. Default is "metric_vs_confidence.png".
     - save_file (bool): Flag to indicate whether to save the plot. Default is False.
+    - formato (str): Format of the saved file. Default is 'pdf'.
 
     Returns:
     - None
@@ -848,11 +877,13 @@ def plot_metric_on_confidence(metric_confidence: dict[str, dict[str, list[tuple[
         if not file_name:
             raise ValueError(
                 "Filename must be provided when save_file is True.")
+        elif not file_name.endswith(formato):
+            file_name = file_name.split('.')[0] + '.' + formato
         if not out_dir:
             raise ValueError(
                 "Output directory 'out_dir' must be specified when 'save_file' is True.")
         plot_file = os.path.join(out_dir, file_name)
-        plt.savefig(plot_file)
+        plt.savefig(plot_file, format=formato)
         print(f'\033[3m{super_title}\033[0m saved to {file_name}')
     else:
         plt.show()
@@ -861,8 +892,8 @@ def plot_metric_on_confidence(metric_confidence: dict[str, dict[str, list[tuple[
 
 def plot_metric_trend(metric_trend: dict[str, dict[str, tuple[list, list, float]]],
                       metric: str = "accuracy", super_title: str = "", grid: bool = True,
-                      fig_size: tuple[int, int] = (10, 5), dpi: int = 100,
-                      out_dir: str = "", file_name: str = "", save_file: bool = False) -> None:
+                      fig_size: tuple[int, int] = (10, 5), dpi: int = 100, out_dir: str = "",
+                      file_name: str = "", save_file: bool = False, formato: str = 'pdf') -> None:
     """
     This function plots the metric values for two different modes.
 
@@ -876,6 +907,7 @@ def plot_metric_trend(metric_trend: dict[str, dict[str, tuple[list, list, float]
     - out_dir (str): Output directory to save the plot. Default is "".
     - file_name (str): Filename to save the plot. Default is "".
     - save_file (bool): Flag to indicate whether to save the plot. Default is False.
+    - formato (str): Format of the saved file. Default is 'pdf'.
 
     Returns:
     - None
@@ -910,11 +942,13 @@ def plot_metric_trend(metric_trend: dict[str, dict[str, tuple[list, list, float]
         if not file_name:
             raise ValueError(
                 "Filename must be provided when save_file is True.")
+        elif not file_name.endswith(formato):
+            file_name = file_name.split('.')[0] + '.' + formato
         if not out_dir:
             raise ValueError(
                 "Output directory 'out_dir' must be specified when 'save_file' is True.")
         plot_file = os.path.join(out_dir, file_name)
-        plt.savefig(plot_file)
+        plt.savefig(plot_file, format=formato)
         print(f'\033[3m{super_title}\033[0m saved to {file_name}')
     else:
         plt.show()
