@@ -328,8 +328,11 @@ def metrics_per_confidence(outputs_targets_tuple: tuple[torch.Tensor, torch.Tens
         if step < min_confidence:
             metric_values.append((float(step), 0.0))
         elif step <= max_confidence:
-            metric_values.append((float(step), metric_func(
-                targets_np[covered], outputs_np[covered])))
+            if len(np.unique(targets_np[covered])) > 1:
+                metric_value = metric_func(targets_np[covered], outputs_np[covered])
+            else:
+                metric_value = 0.0
+            metric_values.append((float(step), metric_value))
 
     return metric_values
 

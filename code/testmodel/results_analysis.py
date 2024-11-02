@@ -13,6 +13,16 @@ from utils.plotting import (
 import json
 import os
 
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+plt.style.use([s for s in plt.style.available if 'whitegrid' in s][0])
+plt.rcParams['figure.figsize'] = [16, 9]
+plt.rcParams['figure.dpi'] = 100
+plt.rcParams['font.size'] = 14
+
+sns.set(style="whitegrid", font_scale=1.5)
+
 # Warning settings
 import warnings
 warnings.filterwarnings("ignore")
@@ -160,7 +170,7 @@ def main(output_dir: str = '../../output/', save_plots: bool = True) -> None:
         plot_model_metrics(models_metrics, mode, plt_dir, save_file=save_plots)
         plot_model_metrics2(models_metrics, plt_dir, save_file=save_plots)
 
-    for m in ['accuracy', 'entropy']:
+    for m in ['accuracy', 'entropy', 'auc', 'f1', 'recall']:
         boxplot_metrics(m, models_metrics, plt_dir, save_file=save_plots)
         barplot_metrics(m, models_metrics, plt_dir, save_file=save_plots)
         all_datas = {el: [] for el in models_metrics}
@@ -178,7 +188,7 @@ def main(output_dir: str = '../../output/', save_plots: bool = True) -> None:
         plot_cumulative_count(all_datas,
                               x_label=m.capitalize(), y_label='Number of Samples',
                               title=f'Cumulative Count of {m}', save_file=save_plots,
-                              filename=os.path.join(plt_dir, f'cumulative_count_{m}.png'))
+                              filename=os.path.join(plt_dir, f'cumulative_count_{m}.pdf'))
 
     modes = ['test', 'mcd_validation']
     for mode in modes:
@@ -245,7 +255,7 @@ def main(output_dir: str = '../../output/', save_plots: bool = True) -> None:
                                                                         step=0.05, mcd=True, threshold=models[model]["best_threshold"])
         super_title = "Monte Carlo Dropout" if mode == "mcd_validation" else "Test"
         super_title += f' - {metric.capitalize()} on Confidence'
-        super_title += ' - Variational Ratio'
+        super_title += ' - Variation Ratio'
         plot_metric_on_confidence(metric_confidence, metric=metric, file_name=f'{mode}_{metric}_var-ratio', super_title=super_title,
                                   out_dir=plt_dir, save_file=save_plots, min_conf=0.5)
 

@@ -353,7 +353,7 @@ def plot_exit_counts(count_exit, out_dir: str,
         filename = filename.split('.')[0] + '.' + formato
 
     if save_file:
-        plt.savefig(os.path.join(out_dir, filename), format=format)
+        plt.savefig(os.path.join(out_dir, filename), format=formato)
         print(f'Plot \033[3m{title}\033[0m saved to {filename}')
     else:
         plt.show()
@@ -440,7 +440,7 @@ def boxplot_metrics(metric: str, models_metrics: dict, out_dir: str,
 
 def barplot_metrics(metric: str, models_metrics: dict, out_dir: str,
                     x_label: str = 'Model', hue_val: str = "Exit",
-                    grid: bool = True, legend: bool = False,
+                    grid: bool = True, legend: bool = True,
                     figsize: tuple = (12, 6), dpi: int = 100,
                     save_file: bool = True, formato: str = 'pdf') -> None:
     """
@@ -495,8 +495,10 @@ def barplot_metrics(metric: str, models_metrics: dict, out_dir: str,
     plt.xlabel(x_label.capitalize())
     plt.ylabel(metric.capitalize())
     plt.grid(grid)
+    plt.tight_layout(rect=[0, 0, 0.85, 1])
+
     if legend:
-        plt.legend(title=hue_val)
+        plt.legend(title='Exit Stage', loc='center left', bbox_to_anchor=(1, 0.5))
     else:
         plt.legend().remove()
 
@@ -510,11 +512,10 @@ def barplot_metrics(metric: str, models_metrics: dict, out_dir: str,
     plt.close()
 
 
-def plot_cumulative_count(data_dict, min_threshold=None, max_threshold=None,
-                          x_label='Threshold', y_label='Number of Samples',
-                          title='Progressive Cumulative Count Above Each Threshold',
-                          fig_size: tuple = (10, 6), dpi: int = 100, grid=True, legend: bool = True,
-                          save_file: bool = True, filename='cumulative_count', formato: str = 'pdf') -> None:
+def plot_cumulative_count(data_dict, min_threshold=None, max_threshold=None, x_label='Threshold',
+                          y_label='Number of Samples', title='Progressive Cumulative Count Above Each Threshold',
+                          fig_size: tuple = (10, 6), dpi: int = 100, grid=True, legend: bool = True, save_file: bool = True,
+                          filename='cumulative_count.png', formato: str = 'pdf', out_dir : str = '') -> None:
     """
     Plots a progressive cumulative count of the number of data points exceeding each unique threshold
     for multiple models, using a common minimum threshold for all models.
@@ -533,6 +534,7 @@ def plot_cumulative_count(data_dict, min_threshold=None, max_threshold=None,
     - save_file: if True, saves the plot to a file; otherwise, displays the plot.
     - filename: name of the file to save the plot to.
     - formato: format of the saved file.
+    - out_dir: directory where the plot image will be saved.
 
     Returns:
     - None
@@ -562,13 +564,16 @@ def plot_cumulative_count(data_dict, min_threshold=None, max_threshold=None,
     else:
         plt.legend().remove()
 
-    # check the extension of the filename and change it if necessary
+
+    if '.' not in filename:
+        filename += f'.{formato}'
     if not filename.endswith(formato):
         filename = filename.split('.')[0] + '.' + formato
 
     # Save the plot or display it
     if save_file:
-        plt.savefig(filename, format=formato)
+        plot_file = os.path.join(out_dir, filename)
+        plt.savefig(plot_file, format=formato)
         print(f'\033[3m{title}\033[0m saved to {filename}')
     else:
         plt.show()
